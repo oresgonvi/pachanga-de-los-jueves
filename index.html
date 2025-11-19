@@ -1,0 +1,495 @@
+import React, { useState, useEffect } from 'react';
+import { ChevronLeft, ChevronRight, Plus, Trash2, Save, DollarSign, Calendar, Trophy, CheckCircle2, AlertCircle, Lock, Unlock, Activity, Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { initializeApp } from "firebase/app";
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "firebase/auth";
+import { getFirestore, doc, onSnapshot, setDoc, updateDoc, deleteField, collection } from "firebase/firestore";
+
+// --- CONFIGURACIÓN FIREBASE ---
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app';
+
+// --- UTILIDADES DE FECHA ---
+const getThursdaysInMonth = (year, month) => {
+  const dates = [];
+  const date = new Date(year, month, 1);
+  while (date.getDay() !== 4) {
+    date.setDate(date.getDate() + 1);
+  }
+  while (date.getMonth() === month) {
+    dates.push(new Date(date)); 
+    date.setDate(date.getDate() + 7);
+  }
+  return dates;
+};
+
+const formatDateKey = (date) => {
+  const offset = date.getTimezoneOffset();
+  const localDate = new Date(date.getTime() - (offset * 60 * 1000));
+  return localDate.toISOString().split('T')[0];
+};
+
+const getMonthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+// --- ESTADO INICIAL ---
+const INITIAL_STATE = {
+  fijos: [
+    { id: 'f1', name: 'Alvaro' }, { id: 'f2', name: 'Carlos' }, { id: 'f3', name: 'Roge' },
+    { id: 'f4', name: 'Refo' }, { id: 'f5', name: 'Ruben' }, { id: 'f6', name: 'Jose' },
+    { id: 'f7', name: 'Adri' }, { id: 'f8', name: 'Ores' }, { id: 'f9', name: 'Jaime' }
+  ],
+  casuals: [
+    { id: 'c1', name: 'Emilio' }, { id: 'c2', name: 'Lino' }, { id: 'c3', name: 'Raul' },
+    { id: 'c4', name: 'Edu' }, { id: 'c5', name: 'Ivan' }
+  ],
+  attendance: {}, 
+  payments: {},
+  config: { fixedFee: 11.70, casualFee: 3.00 }
+};
+
+export default function PachangaManager() {
+  // --- ESTADO ---
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [syncStatus, setSyncStatus] = useState('disconnected');
+  const [viewDate, setViewDate] = useState(new Date());
+  
+  const [fijos, setFijos] = useState(INITIAL_STATE.fijos);
+  const [casuals, setCasuals] = useState(INITIAL_STATE.casuals);
+  const [attendanceData, setAttendanceData] = useState(INITIAL_STATE.attendance);
+  const [paymentData, setPaymentData] = useState(INITIAL_STATE.payments);
+  const [config, setConfig] = useState(INITIAL_STATE.config);
+
+  const [activeTab, setActiveTab] = useState('resumen');
+  const [editMode, setEditMode] = useState(false);
+  
+  // Estado para inputs de nuevo jugador
+  const [newNameFijos, setNewNameFijos] = useState('');
+  const [newNameCasuals, setNewNameCasuals] = useState('');
+
+  // --- AUTENTICACIÓN ---
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (error) {
+        console.error("Auth error:", error);
+        await signInAnonymously(auth);
+      }
+    };
+    initAuth();
+    return onAuthStateChanged(auth, setUser);
+  }, []);
+
+  // --- SINCRONIZACIÓN ---
+  useEffect(() => {
+    if (!user) return;
+
+    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'pachanga_shared', 'game_state');
+    
+    setSyncStatus('syncing');
+    const unsubscribe = onSnapshot(docRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data.fijos) setFijos(data.fijos);
+        if (data.casuals) setCasuals(data.casuals);
+        if (data.attendance) setAttendanceData(data.attendance);
+        if (data.payments) setPaymentData(data.payments);
+        if (data.config) setConfig(data.config);
+        setLoading(false);
+        setSyncStatus('synced');
+      } else {
+        setDoc(docRef, INITIAL_STATE).then(() => {
+          setLoading(false);
+          setSyncStatus('synced');
+        });
+      }
+    }, (error) => {
+      console.error("Error syncing:", error);
+      setSyncStatus('error');
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  const saveUpdate = async (field, value) => {
+    if (!user) {
+      alert("Sin conexión. No se pueden guardar cambios.");
+      return;
+    }
+    setSyncStatus('syncing');
+    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'pachanga_shared', 'game_state');
+    try {
+      await updateDoc(docRef, { [field]: value });
+    } catch (err) {
+      console.error("Error saving update:", err);
+      setSyncStatus('error');
+    }
+  };
+
+  // --- LÓGICA NEGOCIO ---
+
+  const currentMonthThursdays = getThursdaysInMonth(viewDate.getFullYear(), viewDate.getMonth());
+  const currentMonthKey = getMonthKey(viewDate);
+
+  const changeMonth = (offset) => {
+    const newDate = new Date(viewDate);
+    newDate.setMonth(newDate.getMonth() + offset);
+    setViewDate(newDate);
+  };
+
+  const toggleAttendance = (playerId, dateObj) => {
+    const key = `${formatDateKey(dateObj)}_${playerId}`;
+    const isCurrentlyPresent = !!attendanceData[key];
+    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'pachanga_shared', 'game_state');
+    
+    setSyncStatus('syncing');
+    if (isCurrentlyPresent) {
+      updateDoc(docRef, { [`attendance.${key}`]: deleteField() });
+    } else {
+      updateDoc(docRef, { [`attendance.${key}`]: true });
+    }
+  };
+
+  const updatePayment = (playerId, amount) => {
+    const key = `${currentMonthKey}_${playerId}`;
+    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'pachanga_shared', 'game_state');
+    setSyncStatus('syncing');
+
+    if (amount === '' || amount === 0) {
+      updateDoc(docRef, { [`payments.${key}`]: deleteField() });
+    } else {
+      updateDoc(docRef, { [`payments.${key}`]: parseFloat(amount) });
+    }
+  };
+
+  const handleAddPlayer = (listType) => {
+    const name = listType === 'fijos' ? newNameFijos : newNameCasuals;
+    if (!name.trim()) return;
+
+    const newPlayer = { id: `${listType[0]}_${Date.now()}`, name: name.trim() };
+    if (listType === 'fijos') {
+      saveUpdate('fijos', [...fijos, newPlayer]);
+      setNewNameFijos('');
+    } else {
+      saveUpdate('casuals', [...casuals, newPlayer]);
+      setNewNameCasuals('');
+    }
+  };
+
+  const removePlayer = (e, id, listType) => {
+    // Detenemos la propagación para evitar conflictos con otros clics
+    e.stopPropagation();
+    // Borrado directo para evitar problemas con popups en móviles
+    if (listType === 'fijos') saveUpdate('fijos', fijos.filter(p => p.id !== id));
+    else saveUpdate('casuals', casuals.filter(p => p.id !== id));
+  };
+
+  const updateConfig = (newConfig) => {
+    saveUpdate('config', newConfig);
+  };
+
+  const getPayment = (playerId) => paymentData[`${currentMonthKey}_${playerId}`] || 0;
+  const isPresent = (playerId, dateObj) => !!attendanceData[`${formatDateKey(dateObj)}_${playerId}`];
+
+  // --- COMPONENTES ---
+
+  const ConnectionStatus = () => {
+    if (syncStatus === 'syncing') return <RefreshCw size={14} className="animate-spin text-yellow-400" />;
+    if (syncStatus === 'synced') return <Wifi size={14} className="text-green-400" />;
+    return <WifiOff size={14} className="text-red-400" />;
+  };
+
+  // Renderizado de tabla
+  const renderTable = (type, players) => {
+    const fee = type === 'fijos' ? config.fixedFee : config.casualFee;
+    const themeColor = type === 'fijos' ? 'text-orange-600' : 'text-blue-600';
+    const headerBg = type === 'fijos' ? 'bg-orange-50' : 'bg-blue-50';
+    const inputValue = type === 'fijos' ? newNameFijos : newNameCasuals;
+    const setInputValue = type === 'fijos' ? setNewNameFijos : setNewNameCasuals;
+    
+    return (
+      <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-slate-200 mb-6">
+        <div className={`px-4 py-3 ${headerBg} border-b border-slate-200 flex justify-between items-center`}>
+          <h3 className={`font-bold text-sm flex items-center gap-2 uppercase ${themeColor}`}>
+            {type === 'fijos' ? <Lock size={16} /> : <Unlock size={16} />}
+            {type === 'fijos' ? 'Equipo Fijo' : 'Jugadores Casuals'}
+          </h3>
+          {editMode && (
+            <div className="flex items-center gap-2 bg-white px-2 py-1 rounded border border-slate-200 text-xs shadow-sm">
+              <span className="text-slate-500 font-bold">PRECIO:</span>
+              <input 
+                type="number" 
+                className="w-16 text-right font-mono border-b outline-none focus:border-orange-500"
+                value={fee}
+                onChange={(e) => updateConfig({ 
+                  ...config, 
+                  [type === 'fijos' ? 'fixedFee' : 'casualFee']: parseFloat(e.target.value) || 0 
+                })}
+              />
+              <span>€</span>
+            </div>
+          )}
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-left">
+            <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b">
+              <tr>
+                <th className="px-4 py-3 sticky left-0 bg-slate-50 z-10 min-w-[140px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Nombre</th>
+                {currentMonthThursdays.map(d => (
+                  <th key={d.toString()} className="px-1 py-2 text-center min-w-[50px]">
+                    <div className="flex flex-col items-center leading-tight">
+                      <span className="font-bold text-slate-800">{d.getDate()}</span>
+                      <span className="text-[9px]">{d.toLocaleString('es-ES', { month: 'short' })}</span>
+                    </div>
+                  </th>
+                ))}
+                <th className="px-2 py-2 text-right min-w-[80px] bg-orange-50/50 text-orange-900">Total</th>
+                <th className="px-2 py-2 text-right min-w-[80px] bg-green-50/50 text-green-900">Pagado</th>
+                {editMode && <th className="w-10"></th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {players.map((player) => {
+                const gamesPlayed = currentMonthThursdays.filter(d => isPresent(player.id, d)).length;
+                const toPay = type === 'fijos' ? fee : (gamesPlayed * fee);
+                const paid = getPayment(player.id);
+                const pending = toPay - paid;
+                
+                const isPaid = pending <= 0.1;
+                const isDebtor = pending > 0.1;
+
+                return (
+                  <tr key={player.id} className="hover:bg-slate-50 transition-colors group">
+                    <td className="px-4 py-2 font-medium text-slate-900 sticky left-0 bg-white group-hover:bg-slate-50 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] border-r border-transparent">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          {player.name}
+                          <span className="text-base" role="img" aria-label="beer">🍺</span>
+                        </div>
+                        {isDebtor && toPay > 0 && <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />}
+                      </div>
+                    </td>
+                    {currentMonthThursdays.map(date => {
+                      const attended = isPresent(player.id, date);
+                      return (
+                        <td key={date.toString()} className="p-1 text-center border-l border-slate-50">
+                          <button
+                            onClick={() => toggleAttendance(player.id, date)}
+                            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 mx-auto border-2 ${
+                              attended 
+                                ? 'bg-orange-500 border-orange-500 text-white shadow-sm scale-100' 
+                                : 'bg-white border-slate-200 text-transparent hover:border-orange-300 scale-90'
+                            }`}
+                          >
+                            {attended && <Activity size={16} />}
+                          </button>
+                        </td>
+                      );
+                    })}
+                    <td className="px-2 py-2 text-right font-mono font-bold text-slate-700 bg-orange-50/20">
+                      {toPay > 0 ? toPay.toFixed(2) : '-'}
+                    </td>
+                    <td className="px-2 py-2 text-right bg-green-50/20">
+                       <input 
+                        type="number" 
+                        value={paid === 0 ? '' : paid} 
+                        placeholder="-"
+                        onChange={(e) => updatePayment(player.id, e.target.value)}
+                        className={`w-16 text-right p-1 rounded text-sm border transition-all outline-none focus:ring-2 focus:ring-orange-400 ${
+                          isPaid && toPay > 0 ? 'bg-green-100 text-green-800 border-green-200' : 
+                          isDebtor ? 'bg-white text-red-600 border-red-200' : 'bg-transparent border-transparent'
+                        }`}
+                      />
+                    </td>
+                    {editMode && (
+                      <td className="px-1 text-center align-middle">
+                        <button 
+                          onClick={(e) => removePlayer(e, player.id, type)} 
+                          className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-full transition-all"
+                          title="Borrar jugador"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+              
+              {/* FILA DE AÑADIR */}
+              <tr className="bg-slate-50/50">
+                <td colSpan={currentMonthThursdays.length + (editMode ? 4 : 3)} className="p-2">
+                  <div className="flex gap-2 max-w-md mx-auto">
+                    <input 
+                      type="text"
+                      placeholder={`Nombre nuevo ${type === 'fijos' ? 'fijo' : 'casual'}...`}
+                      className="flex-1 px-3 py-2 rounded-lg border border-slate-300 text-sm focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-all"
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddPlayer(type)}
+                    />
+                    <button 
+                      onClick={() => handleAddPlayer(type)}
+                      disabled={!inputValue.trim()}
+                      className="px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-bold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                    >
+                      <Plus size={16} /> AÑADIR
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  // --- TOTALES ---
+  const calculateTotals = () => {
+    let expected = 0;
+    let collected = 0;
+
+    fijos.forEach(p => {
+      expected += config.fixedFee;
+      collected += getPayment(p.id);
+    });
+    casuals.forEach(p => {
+      const games = currentMonthThursdays.filter(d => isPresent(p.id, d)).length;
+      expected += (games * config.casualFee);
+      collected += getPayment(p.id);
+    });
+
+    return { expected, collected, debt: expected - collected };
+  };
+
+  const totals = calculateTotals();
+  const monthName = viewDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
+  const formattedMonthName = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+
+  if (loading) return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 text-slate-400 gap-4">
+      <RefreshCw className="animate-spin text-orange-500" size={32} />
+      <span className="text-xs font-bold uppercase tracking-widest">Conectando al vestuario...</span>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-slate-100 font-sans pb-20">
+      
+      {/* HEADER */}
+      <div className="bg-slate-900 text-white sticky top-0 z-30 shadow-xl border-b border-slate-800">
+        <div className="max-w-4xl mx-auto px-4 py-4">
+          
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-full text-white border-2 border-slate-800 flex items-center justify-center bg-slate-800">
+                <span className="text-xl leading-none" role="img" aria-label="basketball">🏀</span>
+              </div>
+              <div>
+                <h1 className="font-black text-xl leading-none tracking-tight text-white flex items-center gap-2">
+                  Pachanga de los jueves <span className="text-2xl">🍺</span>
+                </h1>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="text-orange-400 text-[11px] font-bold uppercase tracking-widest">Baloncesto</p>
+                  <div className="bg-slate-800 px-2 py-0.5 rounded-full flex items-center gap-1.5 border border-slate-700">
+                    <ConnectionStatus />
+                    <span className="text-[9px] text-slate-400 font-mono uppercase">{syncStatus === 'synced' ? 'ONLINE' : syncStatus}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <button 
+              onClick={() => setEditMode(!editMode)}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${
+                editMode 
+                  ? 'bg-orange-500 border-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.4)]' 
+                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'
+              }`}
+            >
+              {editMode ? <Save size={14} /> : null}
+              {editMode ? 'GUARDAR' : 'EDITAR'}
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between bg-slate-800/50 backdrop-blur-sm p-1.5 rounded-xl border border-slate-700/50">
+            <button onClick={() => changeMonth(-1)} className="w-10 h-10 flex items-center justify-center hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors">
+              <ChevronLeft size={24} />
+            </button>
+            <div className="text-center">
+              <h2 className="text-lg font-bold text-white">{formattedMonthName}</h2>
+            </div>
+            <button onClick={() => changeMonth(1)} className="w-10 h-10 flex items-center justify-center hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors">
+              <ChevronRight size={24} />
+            </button>
+          </div>
+
+        </div>
+      </div>
+
+      <div className="max-w-4xl mx-auto px-4 py-6 relative z-20">
+        
+        <div className="grid grid-cols-3 gap-3 mb-8">
+          <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between h-24">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+              <Calendar size={12} /> Previsto
+            </span>
+            <span className="text-xl md:text-2xl font-black text-slate-800">{totals.expected.toFixed(2)}€</span>
+          </div>
+          <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between h-24 relative overflow-hidden">
+            <div className="absolute right-0 top-0 w-12 h-12 bg-green-50 rounded-bl-full -mr-2 -mt-2 z-0"></div>
+            <span className="text-[10px] font-bold text-green-600 uppercase tracking-wider flex items-center gap-1 relative z-10">
+              <DollarSign size={12} /> Caja
+            </span>
+            <span className="text-xl md:text-2xl font-black text-green-600 relative z-10">{totals.collected.toFixed(2)}€</span>
+          </div>
+          <div className={`p-3 rounded-2xl shadow-sm border flex flex-col justify-between h-24 transition-colors ${totals.debt > 0 ? 'bg-red-50 border-red-100' : 'bg-white border-slate-200'}`}>
+            <span className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${totals.debt > 0 ? 'text-red-500' : 'text-slate-400'}`}>
+              <AlertCircle size={12} /> Pendiente
+            </span>
+            <span className={`text-xl md:text-2xl font-black ${totals.debt > 0 ? 'text-red-500' : 'text-slate-300'}`}>
+              {totals.debt.toFixed(2)}€
+            </span>
+          </div>
+        </div>
+
+        <div className="flex p-1 bg-white border border-slate-200 rounded-xl mb-6 shadow-sm">
+          {['resumen', 'fijos', 'casuals'].map(tab => (
+             <button 
+             key={tab}
+             onClick={() => setActiveTab(tab)}
+             className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+               activeTab === tab 
+                ? 'bg-slate-900 text-white shadow-md scale-100' 
+                : 'text-slate-500 hover:bg-slate-50'
+             }`}
+           >
+             {tab}
+           </button>
+          ))}
+        </div>
+
+        {(activeTab === 'resumen' || activeTab === 'fijos') && (
+          renderTable('fijos', fijos)
+        )}
+
+        {(activeTab === 'resumen' || activeTab === 'casuals') && (
+          renderTable('casuals', casuals)
+        )}
+
+        <div className="mt-8 text-center pb-8">
+          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Pachanga de los Jueves • Baloncesto • Cloud Sync</p>
+        </div>
+      </div>
+    </div>
+  );
+}
