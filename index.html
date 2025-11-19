@@ -4,8 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Pachanga de los Jueves</title>
+    
+    <!-- Estilos y Iconos -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    
     <style>
         @keyframes spin { to { transform: rotate(360deg); } }
         .animate-spin-custom { animation: spin 1s linear infinite; }
@@ -27,11 +30,16 @@
 
         .sticky-col { position: sticky; left: 0; z-index: 20; background-color: white; }
         .sticky-shadow { box-shadow: 2px 0 5px -2px rgba(0,0,0,0.1); }
+        
+        .fade-enter { opacity: 0; }
+        .fade-enter-active { opacity: 1; transition: opacity 500ms ease-in; }
+        .fade-exit { opacity: 1; }
+        .fade-exit-active { opacity: 0; transition: opacity 500ms ease-out; }
     </style>
 </head>
 <body class="bg-slate-100 font-sans pb-24 text-slate-800 selection:bg-orange-200 antialiased">
 
-    <!-- Loading -->
+    <!-- Pantalla de Carga -->
     <div id="loading-screen" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-100 gap-4 text-slate-400 transition-opacity duration-500">
         <div class="relative">
             <i data-lucide="refresh-cw" class="w-10 h-10 animate-spin-custom text-orange-500"></i>
@@ -39,15 +47,15 @@
         <span class="text-xs font-bold uppercase tracking-widest">Conectando...</span>
     </div>
 
-    <!-- Main App -->
+    <!-- Aplicación Principal -->
     <div id="main-content" class="hidden opacity-0 transition-opacity duration-500">
         
+        <!-- Cabecera -->
         <header class="bg-slate-900 text-white sticky top-0 z-40 shadow-xl border-b border-slate-800">
             <div class="max-w-4xl mx-auto px-4 py-3 md:py-4">
                 
-                <!-- Header Content -->
                 <div class="relative flex flex-col items-center justify-center mb-4 pt-1">
-                    <!-- Edit Btn -->
+                    <!-- Botón Editar -->
                     <div class="absolute top-1 right-0">
                          <button onclick="Actions.toggleEditMode()" id="btn-edit-mode" 
                             class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border bg-slate-800/80 backdrop-blur border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-white hover:border-slate-600 active:scale-95">
@@ -55,7 +63,7 @@
                         </button>
                     </div>
 
-                    <!-- Logo & Title -->
+                    <!-- Título y Logo -->
                     <div class="flex flex-col items-center gap-2 mt-1">
                         <div class="p-2.5 rounded-full text-white border-4 border-slate-800 flex items-center justify-center bg-slate-800 shadow-xl shadow-orange-500/10 relative group cursor-pointer hover:scale-105 transition-transform duration-300">
                             <span class="text-3xl md:text-4xl leading-none filter drop-shadow-md" role="img" aria-label="basketball">🏀</span>
@@ -77,7 +85,7 @@
                     </div>
                 </div>
 
-                <!-- Month Navigator -->
+                <!-- Navegador de Mes -->
                 <div class="flex items-center justify-between bg-slate-800/50 backdrop-blur-md p-1 rounded-xl border border-slate-700/50 shadow-inner">
                     <button onclick="Actions.changeMonth(-1)" class="touch-target w-10 h-10 flex items-center justify-center hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors active:bg-slate-600">
                         <i data-lucide="chevron-left" class="w-6 h-6"></i>
@@ -91,7 +99,7 @@
                     </button>
                 </div>
 
-                <!-- INVOICE EDITOR (Visible in Edit Mode) -->
+                <!-- Editor de Factura (Modo Edición) -->
                 <div id="invoice-editor" class="hidden mt-3 bg-orange-500/10 border border-orange-500/20 rounded-lg p-2 flex items-center justify-between animate-fade-in">
                     <span class="text-xs font-bold text-orange-200 uppercase tracking-wider flex items-center gap-1">
                         <i data-lucide="receipt" class="w-3 h-3"></i> Factura Total:
@@ -109,7 +117,7 @@
 
         <main class="max-w-4xl mx-auto px-3 md:px-4 py-4 md:py-6 relative z-20">
             
-            <!-- KPIs -->
+            <!-- Estadísticas (KPIs) -->
             <div class="grid grid-cols-3 gap-2 md:gap-4 mb-4">
                 <!-- Previsto -->
                 <div class="bg-white p-2 md:p-3 rounded-xl md:rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between h-20 md:h-24">
@@ -118,7 +126,7 @@
                     </span>
                     <span id="kpi-expected" class="text-base md:text-2xl font-black text-slate-800 truncate">0.00€</span>
                 </div>
-                <!-- Caja Total -->
+                <!-- Recaudado -->
                 <div class="bg-white p-2 md:p-3 rounded-xl md:rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between h-20 md:h-24 relative overflow-hidden group">
                     <div class="absolute right-0 top-0 w-8 h-8 md:w-12 md:h-12 bg-green-50 rounded-bl-full -mr-2 -mt-2 z-0 transition-transform group-hover:scale-110"></div>
                     <span class="text-[9px] md:text-[10px] font-bold text-green-600 uppercase tracking-wider flex flex-col md:flex-row md:items-center gap-1 relative z-10">
@@ -135,7 +143,7 @@
                 </div>
             </div>
 
-            <!-- Breakdown: Fijos vs Casuals (MOSTRANDO DEUDA TOTAL/ESPERADO) -->
+            <!-- Desglose Fijos vs Casuals -->
             <div class="grid grid-cols-2 gap-2 md:gap-4 mb-6">
                 <div class="bg-orange-50/50 p-2 rounded-xl border border-orange-100 flex items-center justify-between">
                     <span class="text-[9px] md:text-[10px] font-bold text-orange-400 uppercase tracking-wider">Total Fijos</span>
@@ -147,14 +155,14 @@
                 </div>
             </div>
 
-            <!-- Tabs -->
+            <!-- Pestañas -->
             <nav class="flex p-1 bg-white border border-slate-200 rounded-xl mb-6 shadow-sm sticky top-[170px] z-30 md:static">
                 <button onclick="Actions.setActiveTab('resumen')" class="tab-btn flex-1 py-2 rounded-lg text-[11px] md:text-xs font-bold uppercase tracking-wider transition-all" data-tab="resumen">Resumen</button>
                 <button onclick="Actions.setActiveTab('fijos')" class="tab-btn flex-1 py-2 rounded-lg text-[11px] md:text-xs font-bold uppercase tracking-wider transition-all" data-tab="fijos">Fijos</button>
                 <button onclick="Actions.setActiveTab('casuals')" class="tab-btn flex-1 py-2 rounded-lg text-[11px] md:text-xs font-bold uppercase tracking-wider transition-all" data-tab="casuals">Casuals</button>
             </nav>
 
-            <!-- Tables Container -->
+            <!-- Contenedor de Tablas -->
             <div id="tables-container" class="space-y-6 md:space-y-8"></div>
 
             <footer class="mt-12 text-center pb-8 border-t border-slate-200 pt-8">
@@ -164,49 +172,64 @@
         </main>
     </div>
 
-    <!-- Application Logic -->
+    <!-- Lógica de la Aplicación -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, onSnapshot, setDoc, updateDoc, deleteField } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- CONFIG ---
-        const CONSTANTS = {
-            COLLECTION: 'pachanga_shared',
-            DOC_ID: 'game_state',
-            INITIAL_STATE: {
-                fijos: [
-                    { id: 'f1', name: 'Alvaro' }, { id: 'f2', name: 'Carlos' }, { id: 'f3', name: 'Roge' },
-                    { id: 'f4', name: 'Refo' }, { id: 'f5', name: 'Ruben' }, { id: 'f6', name: 'Jose' },
-                    { id: 'f7', name: 'Adri' }, { id: 'f8', name: 'Ores' }, { id: 'f9', name: 'Jaime' }
-                ],
-                casuals: [
-                    { id: 'c1', name: 'Emilio' }, { id: 'c2', name: 'Lino' }, { id: 'c3', name: 'Raul' },
-                    { id: 'c4', name: 'Edu' }, { id: 'c5', name: 'Ivan' }
-                ],
-                attendance: {},
-                payments: {},
-                customFees: {},
-                invoices: {}, 
-                config: { fixedFee: 11.70, casualFee: 3.00 }
-            },
-            DAYS: { THURSDAY: 4 }
-        };
-
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        // --- CONFIGURACIÓN FIREBASE ---
+        const firebaseConfig = typeof __firebase_config !== 'undefined' 
+            ? JSON.parse(__firebase_config)
+            : { 
+                apiKey: "TU_API_KEY", 
+                authDomain: "TU_PROYECTO.firebaseapp.com", 
+                projectId: "TU_PROYECTO", 
+                storageBucket: "TU_PROYECTO.appspot.com", 
+                messagingSenderId: "TU_SENDER_ID", 
+                appId: "TU_APP_ID" 
+            };
+        
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app';
+        
+        const COLLECTION_NAME = "pachanga_data"; 
+        const DOC_ID = "jueves_basket";
+        const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'default-app';
 
-        // --- STORE ---
+        // --- ESTADO INICIAL CON FACTURA DE 156€ ---
+        const today = new Date();
+        const currentMonthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+        
+        const INITIAL_STATE = {
+            fijos: [
+                { id: 'f1', name: 'Alvaro' }, { id: 'f2', name: 'Carlos' }, { id: 'f3', name: 'Roge' },
+                { id: 'f4', name: 'Refo' }, { id: 'f5', name: 'Ruben' }, { id: 'f6', name: 'Jose' },
+                { id: 'f7', name: 'Adri' }, { id: 'f8', name: 'Ores' }, { id: 'f9', name: 'Jaime' }
+            ],
+            casuals: [
+                { id: 'c1', name: 'Emilio' }, { id: 'c2', name: 'Lino' }, { id: 'c3', name: 'Raul' },
+                { id: 'c4', name: 'Edu' }, { id: 'c5', name: 'Ivan' }
+            ],
+            attendance: {},
+            payments: {},
+            customFees: {},
+            // AQUÍ ESTÁ EL CAMBIO: Factura inicial de 156€ para el mes actual
+            invoices: { [currentMonthKey]: 156 }, 
+            config: { fixedFee: 11.70, casualFee: 3.00 }
+        };
+        
+        const DAYS = { THURSDAY: 4 };
+
+        // --- GESTIÓN DE ESTADO LOCAL ---
         const Store = {
             user: null,
             syncStatus: 'disconnected',
             viewDate: new Date(),
             activeTab: 'resumen',
             editMode: false,
-            data: { ...CONSTANTS.INITIAL_STATE },
+            data: { ...INITIAL_STATE },
             inputs: { fijos: '', casuals: '' }, 
             
             getThursdays() {
@@ -217,12 +240,12 @@
             }
         };
 
-        // --- UTILS ---
+        // --- UTILIDADES ---
         const Utils = {
             getThursdaysInMonth(year, month) {
                 const dates = [];
                 const date = new Date(year, month, 1);
-                while (date.getDay() !== CONSTANTS.DAYS.THURSDAY) date.setDate(date.getDate() + 1);
+                while (date.getDay() !== DAYS.THURSDAY) date.setDate(date.getDate() + 1);
                 while (date.getMonth() === month) {
                     dates.push(new Date(date));
                     date.setDate(date.getDate() + 7);
@@ -245,17 +268,25 @@
             }
         };
 
-        // --- FIREBASE ---
+        // --- SERVICIO DE DATOS ---
         const Service = {
             async initAuth() {
                 try {
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await signInWithCustomToken(auth, __initial_auth_token);
-                    else await signInAnonymously(auth);
-                } catch (error) { console.error(error); await signInAnonymously(auth); }
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                } catch (error) { 
+                    console.error("Error de autenticación:", error);
+                    // Fallback seguro
+                    try { await signInAnonymously(auth); } catch(e) { UI.setSyncStatus('disconnected'); }
+                }
             },
             setupSync() {
-                const docRef = doc(db, 'artifacts', appId, 'public', 'data', CONSTANTS.COLLECTION, CONSTANTS.DOC_ID);
+                const docRef = doc(db, 'artifacts', APP_ID, 'public', 'data', COLLECTION_NAME, DOC_ID);
                 UI.setSyncStatus('syncing');
+                
                 onSnapshot(docRef, (snapshot) => {
                     if (snapshot.exists()) {
                         Store.data = { ...Store.data, ...snapshot.data() };
@@ -264,28 +295,52 @@
                         UI.setSyncStatus('synced');
                         UI.hideLoading();
                         UI.render();
-                    } else setDoc(docRef, CONSTANTS.INITIAL_STATE);
+                    } else {
+                        setDoc(docRef, INITIAL_STATE).then(() => {
+                            console.log("Base de datos creada con factura de 156€");
+                            UI.setSyncStatus('synced');
+                            UI.hideLoading();
+                            UI.render();
+                        });
+                    }
+                }, (error) => {
+                    console.error("Error de sincronización:", error);
+                    // En caso de error, mostramos la app offline pero con los datos locales iniciales
+                    UI.setSyncStatus('disconnected');
+                    UI.hideLoading();
+                    UI.render();
                 });
             },
             async updateField(field, value) {
-                if (!Store.user) return alert("Sin conexión");
+                if (!Store.user) return alert("Sin conexión. Revisa tu internet.");
                 UI.setSyncStatus('syncing');
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', CONSTANTS.COLLECTION, CONSTANTS.DOC_ID), { [field]: value });
+                try {
+                    const docRef = doc(db, 'artifacts', APP_ID, 'public', 'data', COLLECTION_NAME, DOC_ID);
+                    await updateDoc(docRef, { [field]: value });
+                } catch(err) {
+                    console.error("Error guardando:", err);
+                    UI.setSyncStatus('synced'); 
+                }
             }
         };
 
-        // --- UI ---
+        // --- UI RENDERER ---
         const UI = {
             setSyncStatus(status) {
                 const config = {
-                    syncing: { icon: 'refresh-cw', color: 'text-yellow-400', anim: 'animate-spin-custom', text: 'SYNCING' },
+                    syncing: { icon: 'refresh-cw', color: 'text-yellow-400', anim: 'animate-spin-custom', text: 'SYNC' },
                     synced: { icon: 'wifi', color: 'text-green-400', anim: '', text: 'ONLINE' },
                     disconnected: { icon: 'wifi-off', color: 'text-slate-400', anim: '', text: 'OFFLINE' }
                 };
                 const s = config[status] || config.disconnected;
-                document.getElementById('connection-icon').innerHTML = `<i data-lucide="${s.icon}" class="w-3 h-3 ${s.color} ${s.anim}"></i>`;
-                document.getElementById('connection-text').textContent = s.text;
-                document.getElementById('connection-text').className = `text-[9px] font-mono uppercase ${s.color}`;
+                const iconEl = document.getElementById('connection-icon');
+                const textEl = document.getElementById('connection-text');
+                
+                if(iconEl) iconEl.innerHTML = `<i data-lucide="${s.icon}" class="w-3 h-3 ${s.color} ${s.anim}"></i>`;
+                if(textEl) {
+                    textEl.textContent = s.text;
+                    textEl.className = `text-[9px] font-mono uppercase ${s.color}`;
+                }
                 lucide.createIcons();
             },
 
@@ -295,42 +350,57 @@
                     loader.classList.add('opacity-0');
                     setTimeout(() => { 
                         loader.classList.add('hidden'); 
+                        // CORRECCIÓN: Separar clases en argumentos distintos
                         document.getElementById('main-content').classList.remove('hidden', 'opacity-0'); 
                     }, 500);
                 }
             },
 
             renderKPIs(totals) {
-                document.getElementById('kpi-expected').textContent = Utils.formatMoney(totals.expected);
-                document.getElementById('kpi-collected').textContent = Utils.formatMoney(totals.collected);
-                document.getElementById('kpi-debt').textContent = Utils.formatMoney(totals.debt);
+                const safeSetText = (id, val) => {
+                    const el = document.getElementById(id);
+                    if(el) el.textContent = val;
+                };
+
+                safeSetText('kpi-expected', Utils.formatMoney(totals.expected));
+                safeSetText('kpi-collected', Utils.formatMoney(totals.collected));
+                safeSetText('kpi-debt', Utils.formatMoney(totals.debt));
                 
-                // Update breakdown to show EXPECTED (calculated box), not COLLECTED (paid)
-                document.getElementById('kpi-fijos-expected').textContent = Utils.formatMoney(totals.expectedFijos);
-                document.getElementById('kpi-casuals-expected').textContent = Utils.formatMoney(totals.expectedCasuals);
+                safeSetText('kpi-fijos-expected', Utils.formatMoney(totals.expectedFijos));
+                safeSetText('kpi-casuals-expected', Utils.formatMoney(totals.expectedCasuals));
 
                 const hasDebt = totals.debt > 0.1;
-                document.getElementById('kpi-debt-card').className = `p-2 md:p-3 rounded-xl md:rounded-2xl shadow-sm border flex flex-col justify-between h-20 md:h-24 transition-colors ${hasDebt ? 'bg-red-50 border-red-100' : 'bg-white border-slate-200'}`;
-                document.getElementById('kpi-debt').className = `text-base md:text-2xl font-black truncate ${hasDebt ? 'text-red-500' : 'text-slate-300'}`;
+                const debtCard = document.getElementById('kpi-debt-card');
+                const debtDebt = document.getElementById('kpi-debt');
+                
+                if(debtCard) debtCard.className = `p-2 md:p-3 rounded-xl md:rounded-2xl shadow-sm border flex flex-col justify-between h-20 md:h-24 transition-colors ${hasDebt ? 'bg-red-50 border-red-100' : 'bg-white border-slate-200'}`;
+                if(debtDebt) debtDebt.className = `text-base md:text-2xl font-black truncate ${hasDebt ? 'text-red-500' : 'text-slate-300'}`;
             },
 
             render() {
                 const monthKey = Store.getMonthKey();
                 const thursdays = Store.getThursdays();
-                document.getElementById('month-display').textContent = Utils.capitalize(Store.viewDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' }));
+                
+                const monthDisplay = document.getElementById('month-display');
+                if(monthDisplay) monthDisplay.textContent = Utils.capitalize(Store.viewDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' }));
 
                 const editBtn = document.getElementById('btn-edit-mode');
                 const invoiceEditor = document.getElementById('invoice-editor');
+                const invoiceInput = document.getElementById('invoice-input');
                 
                 if (Store.editMode) {
-                    editBtn.innerHTML = '<i data-lucide="save" class="w-3 h-3 md:w-4 md:h-4"></i> GUARDAR';
-                    editBtn.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border bg-orange-500 border-orange-500 text-white shadow-lg active:scale-95";
-                    invoiceEditor.classList.remove('hidden');
-                    document.getElementById('invoice-input').value = Store.data.invoices[monthKey] || '';
+                    if(editBtn) {
+                        editBtn.innerHTML = '<i data-lucide="save" class="w-3 h-3 md:w-4 md:h-4"></i> GUARDAR';
+                        editBtn.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border bg-orange-500 border-orange-500 text-white shadow-lg active:scale-95";
+                    }
+                    if(invoiceEditor) invoiceEditor.classList.remove('hidden');
+                    if(invoiceInput) invoiceInput.value = Store.data.invoices[monthKey] || '';
                 } else {
-                    editBtn.innerHTML = 'EDITAR';
-                    editBtn.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border bg-slate-800/80 backdrop-blur border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-white active:scale-95";
-                    invoiceEditor.classList.add('hidden');
+                    if(editBtn) {
+                        editBtn.innerHTML = 'EDITAR';
+                        editBtn.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border bg-slate-800/80 backdrop-blur border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-white active:scale-95";
+                    }
+                    if(invoiceEditor) invoiceEditor.classList.add('hidden');
                 }
 
                 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -339,33 +409,30 @@
                         : "tab-btn flex-1 py-2 rounded-lg text-[11px] md:text-xs font-bold uppercase tracking-wider transition-all text-slate-500 hover:bg-slate-50";
                 });
 
-                // --- LOGIC CORE ---
+                // --- CÁLCULOS PRINCIPALES ---
                 
-                // 1. Casuals Expected Revenue
                 let totalCasualsRevenue = 0;
                 Store.data.casuals.forEach(p => {
                     const games = thursdays.filter(d => Store.data.attendance[`${Utils.formatDateKey(d)}_${p.id}`]).length;
                     totalCasualsRevenue += (games * Store.data.config.casualFee);
                 });
 
-                // 2. Fijos Calculation
                 const currentInvoice = parseFloat(Store.data.invoices[monthKey] || 0);
                 const numFijos = Store.data.fijos.length;
                 const dynamicFixedFee = (currentInvoice > 0 && numFijos > 0) 
                     ? (currentInvoice - totalCasualsRevenue) / numFijos 
                     : Store.data.config.fixedFee;
 
-                // 3. Totals
                 let expectedTotal = 0;
                 let collectedTotal = 0;
-                let expectedFijos = 0; // New accumulator for expected breakdown
+                let expectedFijos = 0;
 
                 Store.data.fijos.forEach(p => {
                     const customFee = Store.data.customFees[`${monthKey}_${p.id}`];
                     const feeToPay = customFee !== undefined ? customFee : dynamicFixedFee;
                     const amount = Math.max(0, feeToPay);
                     expectedTotal += amount;
-                    expectedFijos += amount; // Accumulate expected per user
+                    expectedFijos += amount;
                     collectedTotal += (Store.data.payments[`${monthKey}_${p.id}`] || 0);
                 });
 
@@ -386,7 +453,7 @@
                 let html = '';
                 if (Store.activeTab !== 'casuals') html += this.generateTable('fijos', Store.data.fijos, thursdays, dynamicFixedFee);
                 if (Store.activeTab !== 'fijos') html += this.generateTable('casuals', Store.data.casuals, thursdays, Store.data.config.casualFee);
-                container.innerHTML = html;
+                if(container) container.innerHTML = html;
                 lucide.createIcons();
             },
 
@@ -487,6 +554,7 @@
             }
         };
 
+        // --- ACTIONS ---
         window.Actions = {
             toggleEditMode: () => { Store.editMode = !Store.editMode; UI.render(); },
             changeMonth: (offset) => { Store.viewDate.setMonth(Store.viewDate.getMonth() + offset); Store.viewDate = new Date(Store.viewDate); UI.render(); },
