@@ -1,495 +1,541 @@
-import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Trash2, Save, DollarSign, Calendar, Trophy, CheckCircle2, AlertCircle, Lock, Unlock, Activity, Wifi, WifiOff, RefreshCw } from 'lucide-react';
-import { initializeApp } from "firebase/app";
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "firebase/auth";
-import { getFirestore, doc, onSnapshot, setDoc, updateDoc, deleteField, collection } from "firebase/firestore";
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pachanga de los Jueves</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Animaciones y estilos extra */
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .animate-spin-custom { animation: spin 1s linear infinite; }
+        .beer-anim { display: inline-block; transform-origin: bottom center; animation: swing 2s infinite ease-in-out; }
+        @keyframes swing { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } }
+        
+        /* Evitar zoom en inputs en móvil */
+        input, select, textarea { font-size: 16px; }
+    </style>
+</head>
+<body class="bg-slate-100 font-sans pb-20 text-slate-800">
 
-// --- CONFIGURACIÓN FIREBASE ---
-const firebaseConfig = JSON.parse(__firebase_config);
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app';
-
-// --- UTILIDADES DE FECHA ---
-const getThursdaysInMonth = (year, month) => {
-  const dates = [];
-  const date = new Date(year, month, 1);
-  while (date.getDay() !== 4) {
-    date.setDate(date.getDate() + 1);
-  }
-  while (date.getMonth() === month) {
-    dates.push(new Date(date)); 
-    date.setDate(date.getDate() + 7);
-  }
-  return dates;
-};
-
-const formatDateKey = (date) => {
-  const offset = date.getTimezoneOffset();
-  const localDate = new Date(date.getTime() - (offset * 60 * 1000));
-  return localDate.toISOString().split('T')[0];
-};
-
-const getMonthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-
-// --- ESTADO INICIAL ---
-const INITIAL_STATE = {
-  fijos: [
-    { id: 'f1', name: 'Alvaro' }, { id: 'f2', name: 'Carlos' }, { id: 'f3', name: 'Roge' },
-    { id: 'f4', name: 'Refo' }, { id: 'f5', name: 'Ruben' }, { id: 'f6', name: 'Jose' },
-    { id: 'f7', name: 'Adri' }, { id: 'f8', name: 'Ores' }, { id: 'f9', name: 'Jaime' }
-  ],
-  casuals: [
-    { id: 'c1', name: 'Emilio' }, { id: 'c2', name: 'Lino' }, { id: 'c3', name: 'Raul' },
-    { id: 'c4', name: 'Edu' }, { id: 'c5', name: 'Ivan' }
-  ],
-  attendance: {}, 
-  payments: {},
-  config: { fixedFee: 11.70, casualFee: 3.00 }
-};
-
-export default function PachangaManager() {
-  // --- ESTADO ---
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [syncStatus, setSyncStatus] = useState('disconnected');
-  const [viewDate, setViewDate] = useState(new Date());
-  
-  const [fijos, setFijos] = useState(INITIAL_STATE.fijos);
-  const [casuals, setCasuals] = useState(INITIAL_STATE.casuals);
-  const [attendanceData, setAttendanceData] = useState(INITIAL_STATE.attendance);
-  const [paymentData, setPaymentData] = useState(INITIAL_STATE.payments);
-  const [config, setConfig] = useState(INITIAL_STATE.config);
-
-  const [activeTab, setActiveTab] = useState('resumen');
-  const [editMode, setEditMode] = useState(false);
-  
-  // Estado para inputs de nuevo jugador
-  const [newNameFijos, setNewNameFijos] = useState('');
-  const [newNameCasuals, setNewNameCasuals] = useState('');
-
-  // --- AUTENTICACIÓN ---
-  useEffect(() => {
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-      } catch (error) {
-        console.error("Auth error:", error);
-        await signInAnonymously(auth);
-      }
-    };
-    initAuth();
-    return onAuthStateChanged(auth, setUser);
-  }, []);
-
-  // --- SINCRONIZACIÓN ---
-  useEffect(() => {
-    if (!user) return;
-
-    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'pachanga_shared', 'game_state');
-    
-    setSyncStatus('syncing');
-    const unsubscribe = onSnapshot(docRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        if (data.fijos) setFijos(data.fijos);
-        if (data.casuals) setCasuals(data.casuals);
-        if (data.attendance) setAttendanceData(data.attendance);
-        if (data.payments) setPaymentData(data.payments);
-        if (data.config) setConfig(data.config);
-        setLoading(false);
-        setSyncStatus('synced');
-      } else {
-        setDoc(docRef, INITIAL_STATE).then(() => {
-          setLoading(false);
-          setSyncStatus('synced');
-        });
-      }
-    }, (error) => {
-      console.error("Error syncing:", error);
-      setSyncStatus('error');
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [user]);
-
-  const saveUpdate = async (field, value) => {
-    if (!user) {
-      alert("Sin conexión. No se pueden guardar cambios.");
-      return;
-    }
-    setSyncStatus('syncing');
-    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'pachanga_shared', 'game_state');
-    try {
-      await updateDoc(docRef, { [field]: value });
-    } catch (err) {
-      console.error("Error saving update:", err);
-      setSyncStatus('error');
-    }
-  };
-
-  // --- LÓGICA NEGOCIO ---
-
-  const currentMonthThursdays = getThursdaysInMonth(viewDate.getFullYear(), viewDate.getMonth());
-  const currentMonthKey = getMonthKey(viewDate);
-
-  const changeMonth = (offset) => {
-    const newDate = new Date(viewDate);
-    newDate.setMonth(newDate.getMonth() + offset);
-    setViewDate(newDate);
-  };
-
-  const toggleAttendance = (playerId, dateObj) => {
-    const key = `${formatDateKey(dateObj)}_${playerId}`;
-    const isCurrentlyPresent = !!attendanceData[key];
-    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'pachanga_shared', 'game_state');
-    
-    setSyncStatus('syncing');
-    if (isCurrentlyPresent) {
-      updateDoc(docRef, { [`attendance.${key}`]: deleteField() });
-    } else {
-      updateDoc(docRef, { [`attendance.${key}`]: true });
-    }
-  };
-
-  const updatePayment = (playerId, amount) => {
-    const key = `${currentMonthKey}_${playerId}`;
-    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'pachanga_shared', 'game_state');
-    setSyncStatus('syncing');
-
-    if (amount === '' || amount === 0) {
-      updateDoc(docRef, { [`payments.${key}`]: deleteField() });
-    } else {
-      updateDoc(docRef, { [`payments.${key}`]: parseFloat(amount) });
-    }
-  };
-
-  const handleAddPlayer = (listType) => {
-    const name = listType === 'fijos' ? newNameFijos : newNameCasuals;
-    if (!name.trim()) return;
-
-    const newPlayer = { id: `${listType[0]}_${Date.now()}`, name: name.trim() };
-    if (listType === 'fijos') {
-      saveUpdate('fijos', [...fijos, newPlayer]);
-      setNewNameFijos('');
-    } else {
-      saveUpdate('casuals', [...casuals, newPlayer]);
-      setNewNameCasuals('');
-    }
-  };
-
-  const removePlayer = (e, id, listType) => {
-    // Detenemos la propagación para evitar conflictos con otros clics
-    e.stopPropagation();
-    // Borrado directo para evitar problemas con popups en móviles
-    if (listType === 'fijos') saveUpdate('fijos', fijos.filter(p => p.id !== id));
-    else saveUpdate('casuals', casuals.filter(p => p.id !== id));
-  };
-
-  const updateConfig = (newConfig) => {
-    saveUpdate('config', newConfig);
-  };
-
-  const getPayment = (playerId) => paymentData[`${currentMonthKey}_${playerId}`] || 0;
-  const isPresent = (playerId, dateObj) => !!attendanceData[`${formatDateKey(dateObj)}_${playerId}`];
-
-  // --- COMPONENTES ---
-
-  const ConnectionStatus = () => {
-    if (syncStatus === 'syncing') return <RefreshCw size={14} className="animate-spin text-yellow-400" />;
-    if (syncStatus === 'synced') return <Wifi size={14} className="text-green-400" />;
-    return <WifiOff size={14} className="text-red-400" />;
-  };
-
-  // Renderizado de tabla
-  const renderTable = (type, players) => {
-    const fee = type === 'fijos' ? config.fixedFee : config.casualFee;
-    const themeColor = type === 'fijos' ? 'text-orange-600' : 'text-blue-600';
-    const headerBg = type === 'fijos' ? 'bg-orange-50' : 'bg-blue-50';
-    const inputValue = type === 'fijos' ? newNameFijos : newNameCasuals;
-    const setInputValue = type === 'fijos' ? setNewNameFijos : setNewNameCasuals;
-    
-    return (
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-slate-200 mb-6">
-        <div className={`px-4 py-3 ${headerBg} border-b border-slate-200 flex justify-between items-center`}>
-          <h3 className={`font-bold text-sm flex items-center gap-2 uppercase ${themeColor}`}>
-            {type === 'fijos' ? <Lock size={16} /> : <Unlock size={16} />}
-            {type === 'fijos' ? 'Equipo Fijo' : 'Jugadores Casuals'}
-          </h3>
-          {editMode && (
-            <div className="flex items-center gap-2 bg-white px-2 py-1 rounded border border-slate-200 text-xs shadow-sm">
-              <span className="text-slate-500 font-bold">PRECIO:</span>
-              <input 
-                type="number" 
-                className="w-16 text-right font-mono border-b outline-none focus:border-orange-500"
-                value={fee}
-                onChange={(e) => updateConfig({ 
-                  ...config, 
-                  [type === 'fijos' ? 'fixedFee' : 'casualFee']: parseFloat(e.target.value) || 0 
-                })}
-              />
-              <span>€</span>
-            </div>
-          )}
+    <!-- App Container -->
+    <div id="app" class="min-h-screen">
+        <!-- Loading Screen (Initial) -->
+        <div id="loading-screen" class="flex flex-col items-center justify-center min-h-screen gap-4 text-slate-400">
+            <i data-lucide="refresh-cw" class="w-8 h-8 animate-spin-custom text-orange-500"></i>
+            <span class="text-xs font-bold uppercase tracking-widest">Conectando al vestuario...</span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b">
-              <tr>
-                <th className="px-4 py-3 sticky left-0 bg-slate-50 z-10 min-w-[140px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Nombre</th>
-                {currentMonthThursdays.map(d => (
-                  <th key={d.toString()} className="px-1 py-2 text-center min-w-[50px]">
-                    <div className="flex flex-col items-center leading-tight">
-                      <span className="font-bold text-slate-800">{d.getDate()}</span>
-                      <span className="text-[9px]">{d.toLocaleString('es-ES', { month: 'short' })}</span>
+        <!-- Main Content (Hidden initially) -->
+        <div id="main-content" class="hidden">
+            
+            <!-- Header -->
+            <div class="bg-slate-900 text-white sticky top-0 z-40 shadow-xl border-b border-slate-800">
+                <div class="max-w-4xl mx-auto px-4 py-4">
+                    
+                    <!-- Top Bar -->
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center gap-3">
+                            <div class="p-2.5 rounded-full text-white border-2 border-slate-800 flex items-center justify-center bg-slate-800 relative group">
+                                <span class="text-2xl leading-none transform group-hover:scale-110 transition-transform" role="img" aria-label="basketball">🏀</span>
+                            </div>
+                            <div>
+                                <h1 class="font-black text-xl leading-none tracking-tight text-white flex items-center gap-2">
+                                    Pachanga de los jueves <span class="text-2xl beer-anim">🍺</span>
+                                </h1>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <p class="text-orange-400 text-[11px] font-bold uppercase tracking-widest">Baloncesto</p>
+                                    <div class="bg-slate-800 px-2 py-0.5 rounded-full flex items-center gap-1.5 border border-slate-700">
+                                        <span id="connection-icon"></span>
+                                        <span id="connection-text" class="text-[9px] text-slate-400 font-mono uppercase">...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <button id="btn-edit-mode" class="flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold transition-all border bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700">
+                            EDITAR
+                        </button>
                     </div>
-                  </th>
-                ))}
-                <th className="px-2 py-2 text-right min-w-[80px] bg-orange-50/50 text-orange-900">Total</th>
-                <th className="px-2 py-2 text-right min-w-[80px] bg-green-50/50 text-green-900">Pagado</th>
-                {editMode && <th className="w-10"></th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {players.map((player) => {
-                const gamesPlayed = currentMonthThursdays.filter(d => isPresent(player.id, d)).length;
-                const toPay = type === 'fijos' ? fee : (gamesPlayed * fee);
-                const paid = getPayment(player.id);
-                const pending = toPay - paid;
+
+                    <!-- Month Navigator -->
+                    <div class="flex items-center justify-between bg-slate-800/50 backdrop-blur-sm p-1.5 rounded-xl border border-slate-700/50">
+                        <button id="btn-prev-month" class="w-10 h-10 flex items-center justify-center hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors">
+                            <i data-lucide="chevron-left" class="w-6 h-6"></i>
+                        </button>
+                        <div class="text-center">
+                            <h2 id="month-display" class="text-lg font-bold text-white"></h2>
+                        </div>
+                        <button id="btn-next-month" class="w-10 h-10 flex items-center justify-center hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors">
+                            <i data-lucide="chevron-right" class="w-6 h-6"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="max-w-4xl mx-auto px-4 py-6 relative z-20">
                 
+                <!-- KPI Cards -->
+                <div class="grid grid-cols-3 gap-3 mb-8">
+                    <!-- Previsto -->
+                    <div class="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between h-24">
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                            <i data-lucide="calendar" class="w-3 h-3"></i> Previsto
+                        </span>
+                        <span id="kpi-expected" class="text-xl md:text-2xl font-black text-slate-800">0.00€</span>
+                    </div>
+                    <!-- Caja -->
+                    <div class="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between h-24 relative overflow-hidden">
+                        <div class="absolute right-0 top-0 w-12 h-12 bg-green-50 rounded-bl-full -mr-2 -mt-2 z-0"></div>
+                        <span class="text-[10px] font-bold text-green-600 uppercase tracking-wider flex items-center gap-1 relative z-10">
+                            <i data-lucide="dollar-sign" class="w-3 h-3"></i> Caja
+                        </span>
+                        <span id="kpi-collected" class="text-xl md:text-2xl font-black text-green-600 relative z-10">0.00€</span>
+                    </div>
+                    <!-- Pendiente -->
+                    <div id="kpi-debt-card" class="p-3 rounded-2xl shadow-sm border flex flex-col justify-between h-24 transition-colors bg-white border-slate-200">
+                        <span id="kpi-debt-label" class="text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 text-slate-400">
+                            <i data-lucide="alert-circle" class="w-3 h-3"></i> Pendiente
+                        </span>
+                        <span id="kpi-debt" class="text-xl md:text-2xl font-black text-slate-300">0.00€</span>
+                    </div>
+                </div>
+
+                <!-- Tabs -->
+                <div class="flex p-1 bg-white border border-slate-200 rounded-xl mb-6 shadow-sm">
+                    <button onclick="setActiveTab('resumen')" class="tab-btn flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all" data-tab="resumen">Resumen</button>
+                    <button onclick="setActiveTab('fijos')" class="tab-btn flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all" data-tab="fijos">Fijos</button>
+                    <button onclick="setActiveTab('casuals')" class="tab-btn flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all" data-tab="casuals">Casuals</button>
+                </div>
+
+                <!-- Containers for Tables -->
+                <div id="container-fijos"></div>
+                <div id="container-casuals"></div>
+
+                <div class="mt-8 text-center pb-8">
+                    <p class="text-[10px] text-slate-400 uppercase tracking-widest">Pachanga de los Jueves • Baloncesto • Cloud Sync</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logic -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, setDoc, updateDoc, deleteField } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- CONFIG ---
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app';
+
+        // --- STATE ---
+        const state = {
+            user: null,
+            syncStatus: 'disconnected', // disconnected, syncing, synced, error
+            viewDate: new Date(),
+            activeTab: 'resumen',
+            editMode: false,
+            data: {
+                fijos: [
+                    { id: 'f1', name: 'Alvaro' }, { id: 'f2', name: 'Carlos' }, { id: 'f3', name: 'Roge' },
+                    { id: 'f4', name: 'Refo' }, { id: 'f5', name: 'Ruben' }, { id: 'f6', name: 'Jose' },
+                    { id: 'f7', name: 'Adri' }, { id: 'f8', name: 'Ores' }, { id: 'f9', name: 'Jaime' }
+                ],
+                casuals: [
+                    { id: 'c1', name: 'Emilio' }, { id: 'c2', name: 'Lino' }, { id: 'c3', name: 'Raul' },
+                    { id: 'c4', name: 'Edu' }, { id: 'c5', name: 'Ivan' }
+                ],
+                attendance: {},
+                payments: {},
+                config: { fixedFee: 11.70, casualFee: 3.00 }
+            },
+            inputs: {
+                fijos: '',
+                casuals: ''
+            }
+        };
+
+        // --- DATE UTILS ---
+        const getThursdaysInMonth = (year, month) => {
+            const dates = [];
+            const date = new Date(year, month, 1);
+            while (date.getDay() !== 4) date.setDate(date.getDate() + 1);
+            while (date.getMonth() === month) {
+                dates.push(new Date(date));
+                date.setDate(date.getDate() + 7);
+            }
+            return dates;
+        };
+
+        const formatDateKey = (date) => {
+            const offset = date.getTimezoneOffset();
+            const localDate = new Date(date.getTime() - (offset * 60 * 1000));
+            return localDate.toISOString().split('T')[0];
+        };
+
+        const getMonthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+        // --- FIREBASE LOGIC ---
+        const initAuth = async () => {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Auth Error:", error);
+                await signInAnonymously(auth);
+            }
+        };
+
+        onAuthStateChanged(auth, (user) => {
+            state.user = user;
+            if (user) setupSync();
+        });
+
+        const setupSync = () => {
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'pachanga_shared', 'game_state');
+            setSyncStatus('syncing');
+
+            onSnapshot(docRef, (snapshot) => {
+                if (snapshot.exists()) {
+                    const fetchedData = snapshot.data();
+                    // Merge fetched data into state
+                    if (fetchedData.fijos) state.data.fijos = fetchedData.fijos;
+                    if (fetchedData.casuals) state.data.casuals = fetchedData.casuals;
+                    if (fetchedData.attendance) state.data.attendance = fetchedData.attendance;
+                    if (fetchedData.payments) state.data.payments = fetchedData.payments;
+                    if (fetchedData.config) state.data.config = fetchedData.config;
+                    
+                    setSyncStatus('synced');
+                    document.getElementById('loading-screen').classList.add('hidden');
+                    document.getElementById('main-content').classList.remove('hidden');
+                    renderApp();
+                } else {
+                    // Create initial doc
+                    setDoc(docRef, state.data).then(() => {
+                        setSyncStatus('synced');
+                        document.getElementById('loading-screen').classList.add('hidden');
+                        document.getElementById('main-content').classList.remove('hidden');
+                        renderApp();
+                    });
+                }
+            }, (error) => {
+                console.error(error);
+                setSyncStatus('error');
+            });
+        };
+
+        const setSyncStatus = (status) => {
+            state.syncStatus = status;
+            renderConnectionStatus();
+        };
+
+        // --- ACTIONS ---
+        window.updateDocField = async (field, value) => {
+            if (!state.user) return alert("Sin conexión");
+            setSyncStatus('syncing');
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'pachanga_shared', 'game_state');
+            try {
+                await updateDoc(docRef, { [field]: value });
+            } catch (err) {
+                console.error(err);
+                setSyncStatus('error');
+            }
+        };
+
+        window.toggleAttendance = (playerId, dateStr) => {
+            const key = `${dateStr}_${playerId}`;
+            const isPresent = !!state.data.attendance[key];
+            if (isPresent) updateDocField(`attendance.${key}`, deleteField());
+            else updateDocField(`attendance.${key}`, true);
+        };
+
+        window.updatePayment = (playerId, amount) => {
+            const monthKey = getMonthKey(state.viewDate);
+            const key = `${monthKey}_${playerId}`;
+            if (amount === '' || amount == 0) updateDocField(`payments.${key}`, deleteField());
+            else updateDocField(`payments.${key}`, parseFloat(amount));
+        };
+
+        window.addPlayer = (type) => {
+            const inputKey = type === 'fijos' ? 'fijos' : 'casuals';
+            const name = state.inputs[inputKey].trim();
+            if (!name) return;
+
+            const newPlayer = { id: `${type[0]}_${Date.now()}`, name: name };
+            const currentList = state.data[type] || [];
+            updateDocField(type, [...currentList, newPlayer]);
+            
+            // Clear input
+            state.inputs[inputKey] = '';
+            renderApp(); // Re-render to clear input field visual
+        };
+
+        window.removePlayer = (id, type) => {
+            // Borrado directo sin confirmación
+            const currentList = state.data[type];
+            updateDocField(type, currentList.filter(p => p.id !== id));
+        };
+
+        window.updateConfig = (key, value) => {
+            const newConfig = { ...state.data.config, [key]: parseFloat(value) || 0 };
+            updateDocField('config', newConfig);
+        };
+
+        window.changeMonth = (offset) => {
+            const newDate = new Date(state.viewDate);
+            newDate.setMonth(newDate.getMonth() + offset);
+            state.viewDate = newDate;
+            renderApp();
+        };
+
+        window.toggleEditMode = () => {
+            state.editMode = !state.editMode;
+            renderApp();
+        };
+
+        window.setActiveTab = (tab) => {
+            state.activeTab = tab;
+            renderApp();
+        };
+
+        window.handleInputChange = (type, value) => {
+            state.inputs[type] = value;
+            // No re-render full app on keypress to keep focus, just update state
+            // Button state logic handled by inline validation if needed, or re-render only button
+            const btn = document.getElementById(`btn-add-${type}`);
+            if(btn) btn.disabled = !value.trim();
+        };
+
+        // --- RENDERERS ---
+
+        const renderConnectionStatus = () => {
+            const iconContainer = document.getElementById('connection-icon');
+            const textContainer = document.getElementById('connection-text');
+            let iconHtml = '';
+            let text = '';
+
+            if (state.syncStatus === 'syncing') {
+                iconHtml = '<i data-lucide="refresh-cw" class="w-3 h-3 animate-spin-custom text-yellow-400"></i>';
+                text = 'SYNCING';
+            } else if (state.syncStatus === 'synced') {
+                iconHtml = '<i data-lucide="wifi" class="w-3 h-3 text-green-400"></i>';
+                text = 'ONLINE';
+            } else {
+                iconHtml = '<i data-lucide="wifi-off" class="w-3 h-3 text-red-400"></i>';
+                text = 'OFFLINE';
+            }
+
+            iconContainer.innerHTML = iconHtml;
+            textContainer.textContent = text;
+            lucide.createIcons();
+        };
+
+        const renderKPIs = (totals) => {
+            document.getElementById('kpi-expected').textContent = `${totals.expected.toFixed(2)}€`;
+            document.getElementById('kpi-collected').textContent = `${totals.collected.toFixed(2)}€`;
+            document.getElementById('kpi-debt').textContent = `${totals.debt.toFixed(2)}€`;
+            
+            const debtCard = document.getElementById('kpi-debt-card');
+            const debtLabel = document.getElementById('kpi-debt-label');
+            const debtValue = document.getElementById('kpi-debt');
+
+            if (totals.debt > 0.1) {
+                debtCard.className = "p-3 rounded-2xl shadow-sm border flex flex-col justify-between h-24 transition-colors bg-red-50 border-red-100";
+                debtLabel.className = "text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 text-red-500";
+                debtValue.className = "text-xl md:text-2xl font-black text-red-500";
+            } else {
+                debtCard.className = "p-3 rounded-2xl shadow-sm border flex flex-col justify-between h-24 transition-colors bg-white border-slate-200";
+                debtLabel.className = "text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 text-slate-400";
+                debtValue.className = "text-xl md:text-2xl font-black text-slate-300";
+            }
+            lucide.createIcons();
+        };
+
+        const renderTable = (type, players, thursdays) => {
+            const fee = type === 'fijos' ? state.data.config.fixedFee : state.data.config.casualFee;
+            const themeColor = type === 'fijos' ? 'text-orange-600' : 'text-blue-600';
+            const headerBg = type === 'fijos' ? 'bg-orange-50' : 'bg-blue-50';
+            const icon = type === 'fijos' ? 'lock' : 'unlock';
+            const title = type === 'fijos' ? 'Equipo Fijo' : 'Jugadores Casuals';
+            const monthKey = getMonthKey(state.viewDate);
+
+            let html = `
+                <div class="bg-white rounded-xl shadow-sm overflow-hidden border border-slate-200 mb-6">
+                    <div class="px-4 py-3 ${headerBg} border-b border-slate-200 flex justify-between items-center">
+                        <h3 class="font-bold text-sm flex items-center gap-2 uppercase ${themeColor}">
+                            <i data-lucide="${icon}" class="w-4 h-4"></i> ${title}
+                        </h3>
+                        ${state.editMode ? `
+                            <div class="flex items-center gap-2 bg-white px-2 py-1 rounded border border-slate-200 text-xs shadow-sm">
+                                <span class="text-slate-500 font-bold">PRECIO:</span>
+                                <input type="number" value="${fee}" onchange="updateConfig('${type === 'fijos' ? 'fixedFee' : 'casualFee'}', this.value)" class="w-16 text-right font-mono border-b outline-none focus:border-orange-500">
+                                <span>€</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b">
+                                <tr>
+                                    <th class="px-4 py-3 sticky left-0 bg-slate-50 z-10 min-w-[140px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Nombre</th>
+                                    ${thursdays.map(d => `
+                                        <th class="px-1 py-2 text-center min-w-[50px]">
+                                            <div class="flex flex-col items-center leading-tight">
+                                                <span class="font-bold text-slate-800">${d.getDate()}</span>
+                                                <span class="text-[9px]">${d.toLocaleString('es-ES', { month: 'short' })}</span>
+                                            </div>
+                                        </th>
+                                    `).join('')}
+                                    <th class="px-2 py-2 text-right min-w-[80px] bg-orange-50/50 text-orange-900">Total</th>
+                                    <th class="px-2 py-2 text-right min-w-[80px] bg-green-50/50 text-green-900">Pagado</th>
+                                    ${state.editMode ? '<th class="w-10"></th>' : ''}
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+            `;
+
+            players.forEach(player => {
+                const gamesPlayed = thursdays.filter(d => state.data.attendance[`${formatDateKey(d)}_${player.id}`]).length;
+                const toPay = type === 'fijos' ? fee : (gamesPlayed * fee);
+                const paid = state.data.payments[`${monthKey}_${player.id}`] || 0;
+                const pending = toPay - paid;
                 const isPaid = pending <= 0.1;
                 const isDebtor = pending > 0.1;
 
-                return (
-                  <tr key={player.id} className="hover:bg-slate-50 transition-colors group">
-                    <td className="px-4 py-2 font-medium text-slate-900 sticky left-0 bg-white group-hover:bg-slate-50 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] border-r border-transparent">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
-                          {player.name}
-                          <span className="text-base" role="img" aria-label="beer">🍺</span>
-                        </div>
-                        {isDebtor && toPay > 0 && <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />}
-                      </div>
-                    </td>
-                    {currentMonthThursdays.map(date => {
-                      const attended = isPresent(player.id, date);
-                      return (
-                        <td key={date.toString()} className="p-1 text-center border-l border-slate-50">
-                          <button
-                            onClick={() => toggleAttendance(player.id, date)}
-                            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 mx-auto border-2 ${
-                              attended 
-                                ? 'bg-orange-500 border-orange-500 text-white shadow-sm scale-100' 
-                                : 'bg-white border-slate-200 text-transparent hover:border-orange-300 scale-90'
-                            }`}
-                          >
-                            {attended && <Activity size={16} />}
-                          </button>
+                html += `
+                    <tr class="hover:bg-slate-50 transition-colors group">
+                        <td class="px-4 py-2 font-medium text-slate-900 sticky left-0 bg-white group-hover:bg-slate-50 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] border-r border-transparent">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-1.5">
+                                    ${player.name} <span class="text-base">🍺</span>
+                                </div>
+                                ${isDebtor && toPay > 0 ? '<div class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></div>' : ''}
+                            </div>
                         </td>
-                      );
-                    })}
-                    <td className="px-2 py-2 text-right font-mono font-bold text-slate-700 bg-orange-50/20">
-                      {toPay > 0 ? toPay.toFixed(2) : '-'}
-                    </td>
-                    <td className="px-2 py-2 text-right bg-green-50/20">
-                       <input 
-                        type="number" 
-                        value={paid === 0 ? '' : paid} 
-                        placeholder="-"
-                        onChange={(e) => updatePayment(player.id, e.target.value)}
-                        className={`w-16 text-right p-1 rounded text-sm border transition-all outline-none focus:ring-2 focus:ring-orange-400 ${
-                          isPaid && toPay > 0 ? 'bg-green-100 text-green-800 border-green-200' : 
-                          isDebtor ? 'bg-white text-red-600 border-red-200' : 'bg-transparent border-transparent'
-                        }`}
-                      />
-                    </td>
-                    {editMode && (
-                      <td className="px-1 text-center align-middle">
-                        <button 
-                          onClick={(e) => removePlayer(e, player.id, type)} 
-                          className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-full transition-all"
-                          title="Borrar jugador"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-              
-              {/* FILA DE AÑADIR */}
-              <tr className="bg-slate-50/50">
-                <td colSpan={currentMonthThursdays.length + (editMode ? 4 : 3)} className="p-2">
-                  <div className="flex gap-2 max-w-md mx-auto">
-                    <input 
-                      type="text"
-                      placeholder={`Nombre nuevo ${type === 'fijos' ? 'fijo' : 'casual'}...`}
-                      className="flex-1 px-3 py-2 rounded-lg border border-slate-300 text-sm focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-all"
-                      value={inputValue}
-                      onChange={(e) => setInputValue(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddPlayer(type)}
-                    />
-                    <button 
-                      onClick={() => handleAddPlayer(type)}
-                      disabled={!inputValue.trim()}
-                      className="px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-bold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
-                    >
-                      <Plus size={16} /> AÑADIR
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  };
+                        ${thursdays.map(d => {
+                            const dKey = formatDateKey(d);
+                            const attended = !!state.data.attendance[`${dKey}_${player.id}`];
+                            return `
+                                <td class="p-1 text-center border-l border-slate-50">
+                                    <button onclick="toggleAttendance('${player.id}', '${dKey}')" 
+                                        class="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 mx-auto border-2 ${attended ? 'bg-orange-500 border-orange-500 text-white shadow-sm scale-100' : 'bg-white border-slate-200 text-transparent hover:border-orange-300 scale-90'}">
+                                        ${attended ? '<i data-lucide="activity" class="w-4 h-4"></i>' : ''}
+                                    </button>
+                                </td>
+                            `;
+                        }).join('')}
+                        <td class="px-2 py-2 text-right font-mono font-bold text-slate-700 bg-orange-50/20">
+                            ${toPay > 0 ? toPay.toFixed(2) : '-'}
+                        </td>
+                        <td class="px-2 py-2 text-right bg-green-50/20">
+                            <input type="number" placeholder="-" value="${paid === 0 ? '' : paid}" 
+                                onchange="updatePayment('${player.id}', this.value)"
+                                class="w-16 text-right p-1 rounded text-sm border transition-all outline-none focus:ring-2 focus:ring-orange-400 ${isPaid && toPay > 0 ? 'bg-green-100 text-green-800 border-green-200' : isDebtor ? 'bg-white text-red-600 border-red-200' : 'bg-transparent border-transparent'}">
+                        </td>
+                        ${state.editMode ? `
+                            <td class="px-1 text-center align-middle">
+                                <button onclick="removePlayer('${player.id}', '${type}')" class="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-full transition-all" title="Borrar">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </td>
+                        ` : ''}
+                    </tr>
+                `;
+            });
 
-  // --- TOTALES ---
-  const calculateTotals = () => {
-    let expected = 0;
-    let collected = 0;
-
-    fijos.forEach(p => {
-      expected += config.fixedFee;
-      collected += getPayment(p.id);
-    });
-    casuals.forEach(p => {
-      const games = currentMonthThursdays.filter(d => isPresent(p.id, d)).length;
-      expected += (games * config.casualFee);
-      collected += getPayment(p.id);
-    });
-
-    return { expected, collected, debt: expected - collected };
-  };
-
-  const totals = calculateTotals();
-  const monthName = viewDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
-  const formattedMonthName = monthName.charAt(0).toUpperCase() + monthName.slice(1);
-
-  if (loading) return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 text-slate-400 gap-4">
-      <RefreshCw className="animate-spin text-orange-500" size={32} />
-      <span className="text-xs font-bold uppercase tracking-widest">Conectando al vestuario...</span>
-    </div>
-  );
-
-  return (
-    <div className="min-h-screen bg-slate-100 font-sans pb-20">
-      
-      {/* HEADER */}
-      <div className="bg-slate-900 text-white sticky top-0 z-30 shadow-xl border-b border-slate-800">
-        <div className="max-w-4xl mx-auto px-4 py-4">
-          
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-full text-white border-2 border-slate-800 flex items-center justify-center bg-slate-800">
-                <span className="text-xl leading-none" role="img" aria-label="basketball">🏀</span>
-              </div>
-              <div>
-                <h1 className="font-black text-xl leading-none tracking-tight text-white flex items-center gap-2">
-                  Pachanga de los jueves <span className="text-2xl">🍺</span>
-                </h1>
-                <div className="flex items-center gap-2 mt-1">
-                  <p className="text-orange-400 text-[11px] font-bold uppercase tracking-widest">Baloncesto</p>
-                  <div className="bg-slate-800 px-2 py-0.5 rounded-full flex items-center gap-1.5 border border-slate-700">
-                    <ConnectionStatus />
-                    <span className="text-[9px] text-slate-400 font-mono uppercase">{syncStatus === 'synced' ? 'ONLINE' : syncStatus}</span>
-                  </div>
-                </div>
-              </div>
+            // Add Row
+            const inputValue = state.inputs[type];
+            html += `
+                    <tr class="bg-slate-50/50">
+                        <td colspan="${thursdays.length + (state.editMode ? 4 : 3)}" class="p-2">
+                            <div class="flex gap-2 max-w-md mx-auto">
+                                <input type="text" placeholder="Nombre nuevo ${type === 'fijos' ? 'fijo' : 'casual'}..." 
+                                    value="${inputValue}"
+                                    oninput="handleInputChange('${type}', this.value)"
+                                    onkeydown="if(event.key === 'Enter') addPlayer('${type}')"
+                                    class="flex-1 px-3 py-2 rounded-lg border border-slate-300 text-sm focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-all">
+                                <button id="btn-add-${type}" onclick="addPlayer('${type}')" ${!inputValue.trim() ? 'disabled' : ''} class="px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-bold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1">
+                                    <i data-lucide="plus" class="w-4 h-4"></i> AÑADIR
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
             </div>
-            <button 
-              onClick={() => setEditMode(!editMode)}
-              className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${
-                editMode 
-                  ? 'bg-orange-500 border-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.4)]' 
-                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'
-              }`}
-            >
-              {editMode ? <Save size={14} /> : null}
-              {editMode ? 'GUARDAR' : 'EDITAR'}
-            </button>
-          </div>
+            </div>`;
 
-          <div className="flex items-center justify-between bg-slate-800/50 backdrop-blur-sm p-1.5 rounded-xl border border-slate-700/50">
-            <button onClick={() => changeMonth(-1)} className="w-10 h-10 flex items-center justify-center hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors">
-              <ChevronLeft size={24} />
-            </button>
-            <div className="text-center">
-              <h2 className="text-lg font-bold text-white">{formattedMonthName}</h2>
-            </div>
-            <button onClick={() => changeMonth(1)} className="w-10 h-10 flex items-center justify-center hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors">
-              <ChevronRight size={24} />
-            </button>
-          </div>
+            return html;
+        };
 
-        </div>
-      </div>
+        const renderApp = () => {
+            // Date Logic
+            const thursdays = getThursdaysInMonth(state.viewDate.getFullYear(), state.viewDate.getMonth());
+            const monthKey = getMonthKey(state.viewDate);
+            const monthName = state.viewDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
+            const formattedMonthName = monthName.charAt(0).toUpperCase() + monthName.slice(1);
 
-      <div className="max-w-4xl mx-auto px-4 py-6 relative z-20">
-        
-        <div className="grid grid-cols-3 gap-3 mb-8">
-          <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between h-24">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-              <Calendar size={12} /> Previsto
-            </span>
-            <span className="text-xl md:text-2xl font-black text-slate-800">{totals.expected.toFixed(2)}€</span>
-          </div>
-          <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between h-24 relative overflow-hidden">
-            <div className="absolute right-0 top-0 w-12 h-12 bg-green-50 rounded-bl-full -mr-2 -mt-2 z-0"></div>
-            <span className="text-[10px] font-bold text-green-600 uppercase tracking-wider flex items-center gap-1 relative z-10">
-              <DollarSign size={12} /> Caja
-            </span>
-            <span className="text-xl md:text-2xl font-black text-green-600 relative z-10">{totals.collected.toFixed(2)}€</span>
-          </div>
-          <div className={`p-3 rounded-2xl shadow-sm border flex flex-col justify-between h-24 transition-colors ${totals.debt > 0 ? 'bg-red-50 border-red-100' : 'bg-white border-slate-200'}`}>
-            <span className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${totals.debt > 0 ? 'text-red-500' : 'text-slate-400'}`}>
-              <AlertCircle size={12} /> Pendiente
-            </span>
-            <span className={`text-xl md:text-2xl font-black ${totals.debt > 0 ? 'text-red-500' : 'text-slate-300'}`}>
-              {totals.debt.toFixed(2)}€
-            </span>
-          </div>
-        </div>
+            // Update Header
+            document.getElementById('month-display').textContent = formattedMonthName;
+            const editBtn = document.getElementById('btn-edit-mode');
+            editBtn.innerHTML = state.editMode ? '<i data-lucide="save" class="w-4 h-4"></i> GUARDAR' : 'EDITAR';
+            editBtn.className = state.editMode 
+                ? "flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold transition-all border bg-orange-500 border-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.4)]" 
+                : "flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold transition-all border bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700";
 
-        <div className="flex p-1 bg-white border border-slate-200 rounded-xl mb-6 shadow-sm">
-          {['resumen', 'fijos', 'casuals'].map(tab => (
-             <button 
-             key={tab}
-             onClick={() => setActiveTab(tab)}
-             className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-               activeTab === tab 
-                ? 'bg-slate-900 text-white shadow-md scale-100' 
-                : 'text-slate-500 hover:bg-slate-50'
-             }`}
-           >
-             {tab}
-           </button>
-          ))}
-        </div>
+            // Calculate Totals
+            let expected = 0, collected = 0;
+            state.data.fijos.forEach(p => {
+                expected += state.data.config.fixedFee;
+                collected += (state.data.payments[`${monthKey}_${p.id}`] || 0);
+            });
+            state.data.casuals.forEach(p => {
+                const games = thursdays.filter(d => state.data.attendance[`${formatDateKey(d)}_${p.id}`]).length;
+                expected += (games * state.data.config.casualFee);
+                collected += (state.data.payments[`${monthKey}_${p.id}`] || 0);
+            });
+            renderKPIs({ expected, collected, debt: expected - collected });
 
-        {(activeTab === 'resumen' || activeTab === 'fijos') && (
-          renderTable('fijos', fijos)
-        )}
+            // Tabs Styling
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                if (btn.dataset.tab === state.activeTab) {
+                    btn.className = "tab-btn flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all bg-slate-900 text-white shadow-md scale-100";
+                } else {
+                    btn.className = "tab-btn flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all text-slate-500 hover:bg-slate-50";
+                }
+            });
 
-        {(activeTab === 'resumen' || activeTab === 'casuals') && (
-          renderTable('casuals', casuals)
-        )}
+            // Render Tables
+            const containerFijos = document.getElementById('container-fijos');
+            const containerCasuals = document.getElementById('container-casuals');
+            
+            containerFijos.innerHTML = (state.activeTab === 'resumen' || state.activeTab === 'fijos') 
+                ? renderTable('fijos', state.data.fijos, thursdays) 
+                : '';
+            
+            containerCasuals.innerHTML = (state.activeTab === 'resumen' || state.activeTab === 'casuals') 
+                ? renderTable('casuals', state.data.casuals, thursdays) 
+                : '';
 
-        <div className="mt-8 text-center pb-8">
-          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Pachanga de los Jueves • Baloncesto • Cloud Sync</p>
-        </div>
-      </div>
-    </div>
-  );
-}
+            // Re-init icons
+            lucide.createIcons();
+        };
+
+        // Event Listeners for Static Elements
+        document.getElementById('btn-prev-month').onclick = () => changeMonth(-1);
+        document.getElementById('btn-next-month').onclick = () => changeMonth(1);
+        document.getElementById('btn-edit-mode').onclick = toggleEditMode;
+
+        // Start
+        initAuth();
+
+    </script>
+</body>
+</html>
