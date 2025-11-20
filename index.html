@@ -1,591 +1,505 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="h-full">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pachanga de los Jueves</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Pachanga de los Jueves (App)</title>
+    
+    <!-- ICONO PWA -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg width='256' height='256' viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='128' cy='128' r='128' fill='%23FF8C00'/%3E%3Cpath d='M128 0 A128 128 0 0 0 128 256 M25 128 A103 103 0 0 0 231 128' stroke='%23000' stroke-width='8' fill='none'/%3E%3C/svg%3E">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg width='256' height='256' viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='128' cy='128' r='128' fill='%23FF8C00'/%3E%3Cpath d='M128 0 A128 128 0 0 0 128 256 M25 128 A103 103 0 0 0 231 128' stroke='%23000' stroke-width='8' fill='none'/%3E%3C/svg%3E">
+    
+    <!-- Estilos y Iconos -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    
     <style>
+        /* Animaciones */
         @keyframes spin { to { transform: rotate(360deg); } }
         .animate-spin-custom { animation: spin 1s linear infinite; }
+        .beer-anim { display: inline-block; transform-origin: bottom center; animation: swing 3s infinite ease-in-out; }
+        @keyframes swing { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } }
         
-        .beer-anim { 
-            display: inline-block; 
-            transform-origin: bottom center; 
-            animation: swing 3s infinite ease-in-out; 
-        }
-        @keyframes swing { 
-            0%, 100% { transform: rotate(-5deg); } 
-            50% { transform: rotate(5deg); } 
-        }
-        
-        input, select, textarea { font-size: 16px !important; } 
-        .touch-target { min-height: 44px; min-width: 44px; cursor: pointer; }
+        /* Scrollbar invisible pero funcional */
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Sticky Column con borde fuerte */
+        .sticky-col { 
+            position: sticky; 
+            left: 0; 
+            z-index: 20; 
+            border-right: 2px solid #cbd5e1; /* Borde derecho fuerte */
+        }
+        
+        /* Modal */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.8); display: flex;
+            justify-content: center; align-items: center; z-index: 60;
+            opacity: 0; transition: opacity 0.3s; backdrop-filter: blur(2px);
+        }
+        .modal-content {
+            background: #fff; padding: 20px; border-radius: 16px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5); width: 90%; max-width: 340px;
+            transform: scale(0.95); transition: transform 0.3s;
+        }
+        .modal-open { opacity: 1; }
+        .modal-open .modal-content { transform: scale(1); }
 
-        .sticky-col { position: sticky; left: 0; z-index: 20; background-color: white; }
-        .sticky-shadow { box-shadow: 2px 0 5px -2px rgba(0,0,0,0.1); }
+        /* MEJORAS DE VISIBILIDAD DE TABLA */
+        .table-grid { border-collapse: separate; border-spacing: 0; }
+        .table-cell-border { border-right: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; }
+        .table-header-border { border-right: 1px solid #94a3b8; border-bottom: 2px solid #64748b; }
+        .zebra-row:nth-child(even) { background-color: #f1f5f9; } /* Fondo gris más visible */
+        .zebra-row:nth-child(odd) { background-color: #ffffff; }
+        .zebra-row:nth-child(even) .sticky-col { background-color: #f1f5f9; }
+        .zebra-row:nth-child(odd) .sticky-col { background-color: #ffffff; }
+
     </style>
 </head>
-<body class="bg-slate-100 font-sans pb-24 text-slate-800 selection:bg-orange-200 antialiased">
+<body class="bg-slate-200 font-sans text-slate-900 h-full overflow-hidden flex flex-col antialiased selection:bg-orange-200">
 
-    <!-- Loading -->
-    <div id="loading-screen" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-100 gap-4 text-slate-400 transition-opacity duration-500">
-        <div class="relative">
-            <i data-lucide="refresh-cw" class="w-10 h-10 animate-spin-custom text-orange-500"></i>
+    <!-- Diálogo Modal de PIN -->
+    <div id="pin-modal" class="modal-overlay hidden">
+        <div class="modal-content border-2 border-slate-800">
+            <h3 class="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                <i data-lucide="lock" class="w-5 h-5 text-red-600"></i> Acceso Administrador
+            </h3>
+            <p class="text-sm text-slate-700 mb-4 font-medium">Introduce el PIN para editar.</p>
+            <input type="password" id="pin-input" placeholder="PIN" maxlength="4" 
+                   class="w-full px-4 py-3 rounded-lg border-2 border-slate-400 focus:border-orange-600 text-center text-xl font-mono tracking-widest outline-none mb-2 bg-slate-50"
+                   onkeydown="if(event.key === 'Enter') Actions.submitPin()">
+            <div id="pin-error" class="text-red-600 text-xs font-bold mb-3 hidden text-center">PIN incorrecto.</div>
+            <div class="flex gap-2">
+                <button onclick="Actions.closePinModal()" class="flex-1 py-2 text-slate-600 hover:bg-slate-200 rounded-lg font-bold text-sm border border-slate-300">Cancelar</button>
+                <button onclick="Actions.submitPin()" class="flex-1 py-2 bg-slate-900 text-white font-bold rounded-lg hover:bg-slate-800 border border-slate-900">Acceder</button>
+            </div>
         </div>
-        <span class="text-xs font-bold uppercase tracking-widest">Conectando...</span>
     </div>
 
-    <!-- Main App -->
-    <div id="main-content" class="hidden opacity-0 transition-opacity duration-500">
-        
-        <header class="bg-slate-900 text-white sticky top-0 z-40 shadow-xl border-b border-slate-800">
-            <div class="max-w-4xl mx-auto px-4 py-3 md:py-4">
-                
-                <!-- Header Content -->
-                <div class="relative flex flex-col items-center justify-center mb-4 pt-1">
-                    <!-- Edit Btn -->
-                    <div class="absolute top-1 right-0">
-                         <button onclick="Actions.toggleEditMode()" id="btn-edit-mode" 
-                            class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border bg-slate-800/80 backdrop-blur border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-white hover:border-slate-600 active:scale-95">
-                            EDITAR
-                        </button>
-                    </div>
+    <!-- Pantalla de Carga -->
+    <div id="loading-screen" class="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-slate-100 gap-4 text-slate-500 transition-opacity duration-500">
+        <i data-lucide="refresh-cw" class="w-10 h-10 animate-spin-custom text-orange-600"></i>
+        <span class="text-xs font-bold uppercase tracking-widest">Cargando...</span>
+    </div>
 
-                    <!-- Logo & Title -->
-                    <div class="flex flex-col items-center gap-2 mt-1">
-                        <div class="p-2.5 rounded-full text-white border-4 border-slate-800 flex items-center justify-center bg-slate-800 shadow-xl shadow-orange-500/10 relative group cursor-pointer hover:scale-105 transition-transform duration-300">
-                            <span class="text-3xl md:text-4xl leading-none filter drop-shadow-md" role="img" aria-label="basketball">🏀</span>
-                        </div>
-                        
-                        <div class="text-center">
-                            <h1 class="font-black text-xl md:text-2xl leading-none tracking-tight text-white flex items-center justify-center gap-2 mb-1.5">
-                                Pachanga de los jueves <span class="text-xl md:text-2xl beer-anim" title="Tercer tiempo">🍺</span>
-                            </h1>
-                            
-                            <div class="flex items-center justify-center gap-2">
-                                <span class="text-orange-400 text-[10px] font-bold uppercase tracking-widest bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20">Baloncesto</span>
-                                <div class="bg-slate-800 px-2 py-0.5 rounded-full flex items-center gap-1.5 border border-slate-700 shadow-sm">
-                                    <span id="connection-icon"></span>
-                                    <span id="connection-text" class="text-[9px] text-slate-400 font-mono uppercase">...</span>
-                                </div>
+    <!-- HEADER FIJO -->
+    <header class="flex-none bg-slate-900 text-white z-50 shadow-xl border-b-4 border-orange-600 relative">
+        <div class="max-w-4xl mx-auto px-4 py-3">
+            
+            <!-- Barra Superior -->
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-lg bg-orange-600 border-2 border-white flex items-center justify-center shadow-lg">
+                        <span class="text-2xl pb-1" role="img">🏀</span>
+                    </div>
+                    <div>
+                        <h1 class="font-black text-lg leading-none text-white flex items-center gap-2 tracking-tight">
+                            PACHANGA <span class="text-orange-400">JUEVES</span>
+                        </h1>
+                        <div class="flex items-center gap-2 mt-1">
+                            <div class="flex items-center gap-1.5 px-2 py-0.5 bg-slate-800 rounded border border-slate-600">
+                                <span id="connection-icon"></span>
+                                <span id="connection-text" class="text-[10px] text-slate-300 font-mono uppercase font-bold">OFFLINE</span>
                             </div>
                         </div>
                     </div>
                 </div>
+                
+                <button onclick="Actions.toggleEditMode()" id="btn-edit-mode" 
+                    class="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-black uppercase transition-all border-2 bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white hover:border-white active:scale-95 shadow-sm">
+                    EDITAR
+                </button>
+            </div>
 
-                <!-- Month Navigator -->
-                <div class="flex items-center justify-between bg-slate-800/50 backdrop-blur-md p-1 rounded-xl border border-slate-700/50 shadow-inner">
-                    <button onclick="Actions.changeMonth(-1)" class="touch-target w-10 h-10 flex items-center justify-center hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors active:bg-slate-600">
-                        <i data-lucide="chevron-left" class="w-6 h-6"></i>
-                    </button>
-                    <div class="text-center">
-                        <h2 id="month-display" class="text-base md:text-lg font-bold text-white tracking-tight"></h2>
-                        <button onclick="Actions.goToToday()" class="text-[9px] md:text-[10px] text-slate-500 hover:text-orange-400 uppercase font-bold tracking-wider transition-colors">Ir a hoy</button>
-                    </div>
-                    <button onclick="Actions.changeMonth(1)" class="touch-target w-10 h-10 flex items-center justify-center hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors active:bg-slate-600">
-                        <i data-lucide="chevron-right" class="w-6 h-6"></i>
-                    </button>
-                </div>
+            <!-- Controles de Fecha -->
+            <div class="bg-slate-800 p-2.5 rounded-lg border-2 border-slate-700 flex items-center justify-between gap-2 shadow-inner">
+                <input type="date" id="start-date" onchange="Actions.updateRange(this.value, 'start')" 
+                       class="flex-1 bg-slate-900 text-white rounded px-2 py-1.5 text-xs font-bold border border-slate-600 focus:border-orange-500 outline-none text-center cursor-pointer">
+                <span class="text-slate-500 text-xs font-black">➜</span>
+                <input type="date" id="end-date" onchange="Actions.updateRange(this.value, 'end')"
+                       class="flex-1 bg-slate-900 text-white rounded px-2 py-1.5 text-xs font-bold border border-slate-600 focus:border-orange-500 outline-none text-center cursor-pointer">
+            </div>
 
-                <!-- INVOICE EDITOR (Visible in Edit Mode) -->
-                <div id="invoice-editor" class="hidden mt-3 bg-orange-500/10 border border-orange-500/20 rounded-lg p-2 flex items-center justify-between animate-fade-in">
-                    <span class="text-xs font-bold text-orange-200 uppercase tracking-wider flex items-center gap-1">
-                        <i data-lucide="receipt" class="w-3 h-3"></i> Factura Total:
+            <!-- Editor de Factura -->
+            <div id="invoice-editor" class="hidden mt-2 bg-orange-900/40 border-2 border-orange-500/30 rounded-lg p-2 animate-fade-in">
+                <div class="flex items-center justify-between">
+                    <span class="text-[11px] font-black text-orange-100 uppercase tracking-wider flex items-center gap-2">
+                        <i data-lucide="receipt" class="w-4 h-4"></i> Factura Total:
                     </span>
                     <div class="flex items-center gap-1">
                         <input type="number" id="invoice-input" 
                             onchange="Actions.updateInvoiceTotal(this.value)"
                             placeholder="0.00" 
-                            class="w-24 bg-slate-900/50 border border-slate-600 rounded px-2 py-1 text-right text-white font-mono font-bold focus:outline-none focus:border-orange-400 transition-colors text-sm">
-                        <span class="text-orange-200 font-bold text-xs">€</span>
+                            class="w-24 bg-slate-900 border border-slate-500 rounded px-2 py-1 text-right text-white font-mono font-bold text-sm focus:border-orange-400 outline-none shadow-inner">
+                        <span class="text-orange-200 font-black text-sm">€</span>
                     </div>
                 </div>
+                <div id="invoice-calculation" class="text-[10px] text-orange-200 font-mono mt-1 pt-1 border-t border-orange-500/30 leading-tight font-medium"></div>
             </div>
-        </header>
+        </div>
+    </header>
 
-        <main class="max-w-4xl mx-auto px-3 md:px-4 py-4 md:py-6 relative z-20">
+    <!-- MAIN SCROLLABLE -->
+    <main class="flex-1 overflow-y-auto overflow-x-hidden bg-slate-200 relative w-full scroll-smooth">
+        <div class="max-w-4xl mx-auto px-3 py-4 pb-24 space-y-5">
             
             <!-- KPIs -->
-            <div class="grid grid-cols-3 gap-2 md:gap-4 mb-4">
-                <!-- Previsto -->
-                <div class="bg-white p-2 md:p-3 rounded-xl md:rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between h-20 md:h-24">
-                    <span class="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-wider flex flex-col md:flex-row md:items-center gap-1">
-                        <span class="flex items-center gap-1"><i data-lucide="calendar" class="w-3 h-3"></i> Previsto</span>
-                    </span>
-                    <span id="kpi-expected" class="text-base md:text-2xl font-black text-slate-800 truncate">0.00€</span>
+            <div class="grid grid-cols-3 gap-2">
+                <div class="bg-white p-2 rounded-xl shadow-md border-2 border-slate-300 flex flex-col justify-between h-20">
+                    <span class="text-[10px] font-black text-slate-500 uppercase tracking-wider">Previsto</span>
+                    <span id="kpi-expected" class="text-lg font-black text-slate-800 truncate">0.00€</span>
                 </div>
-                <!-- Caja Total -->
-                <div class="bg-white p-2 md:p-3 rounded-xl md:rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between h-20 md:h-24 relative overflow-hidden group">
-                    <div class="absolute right-0 top-0 w-8 h-8 md:w-12 md:h-12 bg-green-50 rounded-bl-full -mr-2 -mt-2 z-0 transition-transform group-hover:scale-110"></div>
-                    <span class="text-[9px] md:text-[10px] font-bold text-green-600 uppercase tracking-wider flex flex-col md:flex-row md:items-center gap-1 relative z-10">
-                        <span class="flex items-center gap-1"><i data-lucide="dollar-sign" class="w-3 h-3"></i> Recaudado</span>
-                    </span>
-                    <span id="kpi-collected" class="text-base md:text-2xl font-black text-green-600 relative z-10 truncate">0.00€</span>
+                <div class="bg-white p-2 rounded-xl shadow-md border-2 border-green-600 flex flex-col justify-between h-20 relative overflow-hidden">
+                    <div class="absolute right-0 top-0 w-12 h-12 bg-green-100 rounded-bl-full border-b-2 border-l-2 border-green-200"></div>
+                    <span class="text-[10px] font-black text-green-700 uppercase tracking-wider relative z-10">Recaudado</span>
+                    <span id="kpi-collected" class="text-lg font-black text-green-700 relative z-10 truncate">0.00€</span>
                 </div>
-                <!-- Pendiente -->
-                <div id="kpi-debt-card" class="p-2 md:p-3 rounded-xl md:rounded-2xl shadow-sm border flex flex-col justify-between h-20 md:h-24 transition-colors bg-white border-slate-200">
-                    <span id="kpi-debt-label" class="text-[9px] md:text-[10px] font-bold uppercase tracking-wider flex flex-col md:flex-row md:items-center gap-1 text-slate-400">
-                        <span class="flex items-center gap-1"><i data-lucide="alert-circle" class="w-3 h-3"></i> Pendiente</span>
-                    </span>
-                    <span id="kpi-debt" class="text-base md:text-2xl font-black text-slate-300 truncate">0.00€</span>
+                <div id="kpi-debt-card" class="p-2 rounded-xl shadow-md border-2 flex flex-col justify-between h-20 transition-colors bg-white border-slate-300">
+                    <span class="text-[10px] font-black text-slate-500 uppercase tracking-wider">Pendiente</span>
+                    <span id="kpi-debt" class="text-lg font-black text-slate-300 truncate">0.00€</span>
                 </div>
             </div>
 
-            <!-- Breakdown: Fijos vs Casuals (MOSTRANDO DEUDA TOTAL/ESPERADO) -->
-            <div class="grid grid-cols-2 gap-2 md:gap-4 mb-6">
-                <div class="bg-orange-50/50 p-2 rounded-xl border border-orange-100 flex items-center justify-between">
-                    <span class="text-[9px] md:text-[10px] font-bold text-orange-400 uppercase tracking-wider">Total Fijos</span>
-                    <span id="kpi-fijos-expected" class="text-sm md:text-lg font-black text-orange-600">0.00€</span>
+            <!-- Pestañas STICKY -->
+            <nav class="sticky top-0 z-40 bg-slate-200/95 backdrop-blur-sm pt-1 pb-2">
+                <div class="flex p-1.5 bg-white border-2 border-slate-300 rounded-xl shadow-md">
+                    <button onclick="Actions.setActiveTab('resumen')" class="tab-btn flex-1 py-2.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all text-center" data-tab="resumen">Resumen</button>
+                    <button onclick="Actions.setActiveTab('fijos')" class="tab-btn flex-1 py-2.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all text-center" data-tab="fijos">Fijos</button>
+                    <button onclick="Actions.setActiveTab('casuals')" class="tab-btn flex-1 py-2.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all text-center" data-tab="casuals">Casuals</button>
+                    <button onclick="Actions.setActiveTab('deudas')" class="tab-btn flex-1 py-2.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all text-center" data-tab="deudas">Deudas</button>
                 </div>
-                <div class="bg-blue-50/50 p-2 rounded-xl border border-blue-100 flex items-center justify-between">
-                    <span class="text-[9px] md:text-[10px] font-bold text-blue-400 uppercase tracking-wider">Total Casuals</span>
-                    <span id="kpi-casuals-expected" class="text-sm md:text-lg font-black text-blue-600">0.00€</span>
-                </div>
-            </div>
-
-            <!-- Tabs -->
-            <nav class="flex p-1 bg-white border border-slate-200 rounded-xl mb-6 shadow-sm sticky top-[170px] z-30 md:static">
-                <button onclick="Actions.setActiveTab('resumen')" class="tab-btn flex-1 py-2 rounded-lg text-[11px] md:text-xs font-bold uppercase tracking-wider transition-all" data-tab="resumen">Resumen</button>
-                <button onclick="Actions.setActiveTab('fijos')" class="tab-btn flex-1 py-2 rounded-lg text-[11px] md:text-xs font-bold uppercase tracking-wider transition-all" data-tab="fijos">Fijos</button>
-                <button onclick="Actions.setActiveTab('casuals')" class="tab-btn flex-1 py-2 rounded-lg text-[11px] md:text-xs font-bold uppercase tracking-wider transition-all" data-tab="casuals">Casuals</button>
             </nav>
 
-            <!-- Tables Container -->
-            <div id="tables-container" class="space-y-6 md:space-y-8"></div>
+            <!-- Contenedor de Tablas -->
+            <div id="tables-container" class="space-y-6 animate-fade-in"></div>
 
-            <footer class="mt-12 text-center pb-8 border-t border-slate-200 pt-8">
-                <p class="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-2">Pachanga de los Jueves • Baloncesto</p>
-                <p class="text-[9px] text-slate-300">Powered by Firebase Cloud Sync</p>
+            <!-- Footer -->
+            <footer class="text-center pt-8 opacity-60">
+                <p class="text-[9px] text-slate-500 font-mono font-bold uppercase bg-slate-300 inline-block px-2 py-1 rounded">
+                    ID: <span id="debug-app-id" class="select-all">...</span> | UID: <span id="debug-user-id" class="select-all">...</span>
+                </p>
             </footer>
-        </main>
-    </div>
+        </div>
+    </main>
 
-    <!-- Application Logic -->
+    <!-- Lógica JS -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, onSnapshot, setDoc, updateDoc, deleteField } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, setDoc, updateDoc, deleteField, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- CONFIGURACIÓN FIREBASE (HÍBRIDA) ---
+        setLogLevel('debug');
+
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "KEY", authDomain: "dom", projectId: "proj" };
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
         
-        let firebaseConfig;
-        let appId = 'default-app';
+        const COLLECTION_NAME = "pachanga_data"; 
+        const DOC_ID = "jueves_basket";
+        const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'default-app';
+        const ADMIN_PIN = '2333';
 
-        // ⚠️ CONFIGURACIÓN MANUAL (PARA GITHUB PAGES / PRODUCCIÓN)
-        // Rellena esto solo cuando vayas a subir el código a GitHub
-        const manualConfig = {
-    apiKey: "AIzaSyDN1QBtqzAnYvV5ISus0PG8CynFK1xqCHs",            authDomain: "pachanga-de-los-jueves.firebaseapp.com",
-            projectId: "pachanga-de-los-jueves",
-            storageBucket: "pachanga-de-los-jueves.firebasestorage.app",
-            messagingSenderId: "635802473606",
-            appId: "1:635802473606:web:917112d1bf6907f6022d07"
-        };
-
-        // LÓGICA DE DETECCIÓN DE ENTORNO
-        if (typeof __firebase_config !== 'undefined') {
-            // Estamos en el entorno de prueba (AI Preview) - Usar config automática
-            console.log("Entorno detectado: AI Preview (Config automática)");
-            firebaseConfig = JSON.parse(__firebase_config);
-            if (typeof __app_id !== 'undefined') appId = __app_id;
-        } else {
-            // Estamos en GitHub o Local - Usar config manual
-            console.log("Entorno detectado: Producción/Local (Config manual)");
-            firebaseConfig = manualConfig;
-        }
-
-        const CONSTANTS = {
-            COLLECTION: 'pachanga_data', 
-            DOC_ID: 'estado_actual',
-            INITIAL_STATE: {
-                fijos: [
-                    { id: 'f1', name: 'Alvaro' }, { id: 'f2', name: 'Carlos' }, { id: 'f3', name: 'Roge' },
-                    { id: 'f4', name: 'Refo' }, { id: 'f5', name: 'Ruben' }, { id: 'f6', name: 'Jose' },
-                    { id: 'f7', name: 'Adri' }, { id: 'f8', name: 'Ores' }, { id: 'f9', name: 'Jaime' }
-                ],
-                casuals: [
-                    { id: 'c1', name: 'Emilio' }, { id: 'c2', name: 'Lino' }, { id: 'c3', name: 'Raul' },
-                    { id: 'c4', name: 'Edu' }, { id: 'c5', name: 'Ivan' }
-                ],
-                attendance: {},
-                payments: {},
-                customFees: {},
-                invoices: {}, 
-                config: { fixedFee: 11.70, casualFee: 3.00 }
+        const Utils = {
+            getThursdaysInDateRange(s, e) {
+                const d=[]; let c=new Date(s+'T00:00:00'); const z=new Date(e+'T00:00:00');
+                while(c<=z){ if(c.getDay()===4) d.push(new Date(c)); c.setDate(c.getDate()+1); }
+                return d;
             },
-            DAYS: { THURSDAY: 4 }
+            getMonthKeysForDateRange(s, e) {
+                const k=new Set(); let c=new Date(s+'T00:00:00'); const z=new Date(e+'T00:00:00');
+                let r=new Date(c.getFullYear(),c.getMonth(),1);
+                while(r<=z){ k.add(`${r.getFullYear()}-${String(r.getMonth()+1).padStart(2,'0')}`); r.setMonth(r.getMonth()+1); }
+                k.add(`${z.getFullYear()}-${String(z.getMonth()+1).padStart(2,'0')}`);
+                return Array.from(k);
+            },
+            formatDateKey(d) { const z=d.getTimezoneOffset()*60000; return (new Date(d-z)).toISOString().split('T')[0]; },
+            formatMoney(n) { return n.toLocaleString('es-ES', {minimumFractionDigits:2, maximumFractionDigits:2}) + '€'; }
         };
 
-        // Inicialización de Firebase
-        let app, auth, db;
-        try {
-            app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
-        } catch (e) {
-            console.error("Error crítico inicializando Firebase:", e);
-            // Si falla aquí, probablemente sea porque estamos en GitHub y no se rellenó manualConfig
-            if (firebaseConfig.apiKey === "TU_API_KEY_AQUI") {
-                alert("¡Falta configuración! Edita el archivo index.html y rellena la sección 'manualConfig' con tus datos de Firebase.");
-            }
-        }
+        const todayStr = Utils.formatDateKey(new Date());
+        const INITIAL_STATE = {
+            fijos: [
+                {id:'f1', name:'Alvaro'}, {id:'f2', name:'Carlos'}, {id:'f3', name:'Roge'}, {id:'f4', name:'Refo'}, 
+                {id:'f5', name:'Ruben'}, {id:'f6', name:'Jose'}, {id:'f7', name:'Adri'}, {id:'f8', name:'Ores'}, {id:'f9', name:'Jaime'}
+            ],
+            casuals: [
+                {id:'c1', name:'Emilio'}, {id:'c2', name:'Lino'}, {id:'c3', name:'Raul'}, {id:'c4', name:'Edu'},
+                {id:'c5', name:'Ivan'}, {id:'c6', name:'Mariano'}, {id:'c7', name:'Pablo D.'}, {id:'c8', name:'Arturo'}, 
+                {id:'c9', name:'Pablo AC'}, {id:'c10', name:'Juan'}, {id:'c11', name:'Pablo T.'}, {id:'c12', name:'Rafa'}, {id:'c13', name:'Zurro'}
+            ],
+            attendance: {}, payments: {}, customFees: {}, invoices: {}, config: { fixedFee: 11.70, casualFee: 3.00 }
+        };
 
-        // --- STORE ---
         const Store = {
-            user: null,
-            syncStatus: 'disconnected',
-            viewDate: new Date(),
+            dateRange: { start: todayStr, end: todayStr },
             activeTab: 'resumen',
             editMode: false,
-            data: { ...CONSTANTS.INITIAL_STATE },
-            inputs: { fijos: '', casuals: '' }, 
-            
-            getThursdays() {
-                return Utils.getThursdaysInMonth(this.viewDate.getFullYear(), this.viewDate.getMonth());
-            },
-            getMonthKey() {
-                return Utils.getMonthKey(this.viewDate);
-            }
+            user: null,
+            data: { ...INITIAL_STATE },
+            inputs: { fijos: '', casuals: '' }
         };
 
-        // --- UTILS ---
-        const Utils = {
-            getThursdaysInMonth(year, month) {
-                const dates = [];
-                const date = new Date(year, month, 1);
-                while (date.getDay() !== CONSTANTS.DAYS.THURSDAY) date.setDate(date.getDate() + 1);
-                while (date.getMonth() === month) {
-                    dates.push(new Date(date));
-                    date.setDate(date.getDate() + 7);
-                }
-                return dates;
-            },
-            formatDateKey(date) {
-                const offset = date.getTimezoneOffset();
-                const localDate = new Date(date.getTime() - (offset * 60 * 1000));
-                return localDate.toISOString().split('T')[0];
-            },
-            getMonthKey(date) {
-                return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-            },
-            capitalize(str) {
-                return str.charAt(0).toUpperCase() + str.slice(1);
-            },
-            formatMoney(amount) {
-                return amount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '€';
-            }
-        };
+        let syncReady = false;
 
-        // --- FIREBASE SERVICE ---
-        const Service = {
-            async initAuth() {
-                try {
-                    // Estrategia de Auth:
-                    // 1. Si hay token del entorno (Preview), úsalo.
-                    // 2. Si no (GitHub), usa Auth Anónimo.
-                    
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                        await signInAnonymously(auth);
-                    }
-                } catch (error) { 
-                    console.error("Error de autenticación:", error);
-                    UI.setSyncStatus('disconnected');
-                }
-            },
-            setupSync() {
-                // Usamos una ruta que funcione tanto en preview como en prod, 
-                // pero para preview necesitamos respetar la estructura segura.
-                
-                let collectionRef;
-                if (typeof __firebase_config !== 'undefined') {
-                     // Ruta segura interna para Preview
-                     collectionRef = doc(db, 'artifacts', appId, 'public', 'data', CONSTANTS.COLLECTION, CONSTANTS.DOC_ID);
-                } else {
-                     // Ruta simple para GitHub
-                     collectionRef = doc(db, CONSTANTS.COLLECTION, CONSTANTS.DOC_ID);
-                }
-                
-                UI.setSyncStatus('syncing');
-                onSnapshot(collectionRef, (snapshot) => {
-                    if (snapshot.exists()) {
-                        Store.data = { ...Store.data, ...snapshot.data() };
-                        if(!Store.data.customFees) Store.data.customFees = {};
-                        if(!Store.data.invoices) Store.data.invoices = {};
-                        UI.setSyncStatus('synced');
-                        UI.hideLoading();
-                        UI.render();
-                    } else {
-                        setDoc(collectionRef, CONSTANTS.INITIAL_STATE);
-                    }
-                }, (error) => {
-                    console.error("Error de sincronización:", error);
-                    UI.setSyncStatus('disconnected');
-                });
-            },
-            async updateField(field, value) {
-                if (!Store.user) return alert("Sin conexión");
-                UI.setSyncStatus('syncing');
-                try {
-                    let docRef;
-                    if (typeof __firebase_config !== 'undefined') {
-                        docRef = doc(db, 'artifacts', appId, 'public', 'data', CONSTANTS.COLLECTION, CONSTANTS.DOC_ID);
-                    } else {
-                        docRef = doc(db, CONSTANTS.COLLECTION, CONSTANTS.DOC_ID);
-                    }
-                    await updateDoc(docRef, { [field]: value });
-                } catch (e) {
-                    console.error("Error guardando:", e);
-                    UI.setSyncStatus('disconnected');
-                }
-            }
-        };
-
-        // --- UI ---
-        const UI = {
-            setSyncStatus(status) {
-                const config = {
-                    syncing: { icon: 'refresh-cw', color: 'text-yellow-400', anim: 'animate-spin-custom', text: 'SYNCING' },
-                    synced: { icon: 'wifi', color: 'text-green-400', anim: '', text: 'ONLINE' },
-                    disconnected: { icon: 'wifi-off', color: 'text-slate-400', anim: '', text: 'OFFLINE' }
+        async function initApp() {
+            loadLocal();
+            if(!localStorage.getItem('pachanga_prefs_v5')) {
+                const n = new Date();
+                Store.dateRange = { 
+                    start: Utils.formatDateKey(new Date(n.getFullYear(), n.getMonth(), 1)),
+                    end: Utils.formatDateKey(new Date(n.getFullYear(), n.getMonth()+1, 0)) 
                 };
-                const s = config[status] || config.disconnected;
-                document.getElementById('connection-icon').innerHTML = `<i data-lucide="${s.icon}" class="w-3 h-3 ${s.color} ${s.anim}"></i>`;
-                document.getElementById('connection-text').textContent = s.text;
-                document.getElementById('connection-text').className = `text-[9px] font-mono uppercase ${s.color}`;
+            }
+            document.getElementById('start-date').value = Store.dateRange.start;
+            document.getElementById('end-date').value = Store.dateRange.end;
+            UI.render(); 
+
+            try {
+                let cred;
+                if(typeof __initial_auth_token !== 'undefined' && __initial_auth_token) cred = await signInWithCustomToken(auth, __initial_auth_token);
+                else cred = await signInAnonymously(auth);
+                Store.user = cred.user;
+
+                const docRef = doc(db, 'artifacts', APP_ID, 'public', 'data', COLLECTION_NAME, DOC_ID);
+                UI.setSync('syncing');
+
+                onSnapshot(docRef, (snap) => {
+                    UI.hideLoading();
+                    if(snap.exists()) {
+                        Store.data = { ...Store.data, ...snap.data() };
+                        syncReady = true;
+                        UI.setSync('online');
+                    } else {
+                        setDoc(docRef, INITIAL_STATE).then(() => { syncReady=true; UI.setSync('online'); });
+                    }
+                    UI.render();
+                }, err => { console.error(err); UI.hideLoading(); UI.setSync('offline'); });
+
+            } catch(e) { console.error(e); UI.hideLoading(); UI.setSync('offline'); }
+        }
+
+        async function updateCloud(field, val) {
+            if(!syncReady) return;
+            UI.setSync('syncing');
+            const docRef = doc(db, 'artifacts', APP_ID, 'public', 'data', COLLECTION_NAME, DOC_ID);
+            try {
+                if(typeof field === 'object') await updateDoc(docRef, field);
+                else await updateDoc(docRef, {[field]: val});
+                UI.setSync('online');
+            } catch(e) { UI.setSync('offline'); }
+        }
+
+        function loadLocal(){ try{ const s=localStorage.getItem('pachanga_prefs_v5'); if(s) Store.dateRange=JSON.parse(s).dateRange; }catch(e){} }
+        function saveLocal(){ localStorage.setItem('pachanga_prefs_v5', JSON.stringify({dateRange: Store.dateRange})); }
+
+        const UI = {
+            setSync(st) {
+                const m = {
+                    online: { i:'wifi', c:'text-green-400', t:'ONLINE' },
+                    offline: { i:'wifi-off', c:'text-slate-400', t:'OFFLINE' },
+                    syncing: { i:'refresh-cw', c:'text-orange-400', t:'SYNC', a:'animate-spin' }
+                };
+                const s = m[st];
+                const el = document.getElementById('connection-icon');
+                const txt = document.getElementById('connection-text');
+                if(el) el.innerHTML = `<i data-lucide="${s.i}" class="w-3 h-3 ${s.a||''}"></i>`;
+                if(txt) { txt.textContent = s.t; txt.className = `text-[9px] font-mono uppercase ${s.c} font-bold`; }
                 lucide.createIcons();
             },
-
-            hideLoading() {
-                const loader = document.getElementById('loading-screen');
-                if (!loader.classList.contains('hidden')) {
-                    loader.classList.add('opacity-0');
-                    setTimeout(() => { 
-                        loader.classList.add('hidden'); 
-                        document.getElementById('main-content').classList.remove('hidden', 'opacity-0'); 
-                    }, 500);
-                }
-            },
-
-            renderKPIs(totals) {
-                document.getElementById('kpi-expected').textContent = Utils.formatMoney(totals.expected);
-                document.getElementById('kpi-collected').textContent = Utils.formatMoney(totals.collected);
-                document.getElementById('kpi-debt').textContent = Utils.formatMoney(totals.debt);
-                
-                document.getElementById('kpi-fijos-expected').textContent = Utils.formatMoney(totals.expectedFijos);
-                document.getElementById('kpi-casuals-expected').textContent = Utils.formatMoney(totals.expectedCasuals);
-
-                const hasDebt = totals.debt > 0.1;
-                document.getElementById('kpi-debt-card').className = `p-2 md:p-3 rounded-xl md:rounded-2xl shadow-sm border flex flex-col justify-between h-20 md:h-24 transition-colors ${hasDebt ? 'bg-red-50 border-red-100' : 'bg-white border-slate-200'}`;
-                document.getElementById('kpi-debt').className = `text-base md:text-2xl font-black truncate ${hasDebt ? 'text-red-500' : 'text-slate-300'}`;
-            },
+            hideLoading(){ document.getElementById('loading-screen').classList.add('hidden'); },
 
             render() {
-                const monthKey = Store.getMonthKey();
-                const thursdays = Store.getThursdays();
-                document.getElementById('month-display').textContent = Utils.capitalize(Store.viewDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' }));
+                const thursdays = Utils.getThursdaysInDateRange(Store.dateRange.start, Store.dateRange.end);
+                const rangeKeys = Utils.getMonthKeysForDateRange(Store.dateRange.start, Store.dateRange.end);
+                const firstMK = rangeKeys[0];
 
+                // Edit Mode
                 const editBtn = document.getElementById('btn-edit-mode');
-                const invoiceEditor = document.getElementById('invoice-editor');
+                const invEditor = document.getElementById('invoice-editor');
+                const invInput = document.getElementById('invoice-input');
                 
-                if (Store.editMode) {
-                    editBtn.innerHTML = '<i data-lucide="save" class="w-3 h-3 md:w-4 md:h-4"></i> GUARDAR';
-                    editBtn.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border bg-orange-500 border-orange-500 text-white shadow-lg active:scale-95";
-                    invoiceEditor.classList.remove('hidden');
-                    document.getElementById('invoice-input').value = Store.data.invoices[monthKey] || '';
+                if(Store.editMode) {
+                    editBtn.innerHTML = `<i data-lucide="unlock" class="w-3 h-3"></i> OK`;
+                    editBtn.className = "flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-black transition-all border-2 bg-orange-600 border-orange-600 text-white shadow-lg active:scale-95";
+                    invEditor.classList.remove('hidden');
+                    invInput.value = (firstMK && Store.data.invoices[firstMK]) || '';
                 } else {
-                    editBtn.innerHTML = 'EDITAR';
-                    editBtn.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border bg-slate-800/80 backdrop-blur border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-white active:scale-95";
-                    invoiceEditor.classList.add('hidden');
+                    editBtn.innerHTML = `<i data-lucide="lock" class="w-3 h-3"></i> EDITAR`;
+                    editBtn.className = "flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-black uppercase transition-all border-2 bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white hover:border-white active:scale-95 shadow-sm";
+                    invEditor.classList.add('hidden');
                 }
 
-                document.querySelectorAll('.tab-btn').forEach(btn => {
-                    btn.className = (btn.dataset.tab === Store.activeTab) 
-                        ? "tab-btn flex-1 py-2 rounded-lg text-[11px] md:text-xs font-bold uppercase tracking-wider transition-all bg-slate-900 text-white shadow-md scale-100"
-                        : "tab-btn flex-1 py-2 rounded-lg text-[11px] md:text-xs font-bold uppercase tracking-wider transition-all text-slate-500 hover:bg-slate-50";
+                // Tabs
+                document.querySelectorAll('.tab-btn').forEach(b => {
+                    const active = b.dataset.tab === Store.activeTab;
+                    b.className = active 
+                        ? "tab-btn flex-1 py-2 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all bg-slate-900 text-white shadow-md transform scale-100 border border-slate-900"
+                        : "tab-btn flex-1 py-2 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all text-slate-500 hover:bg-slate-100 hover:text-slate-800 border border-transparent";
                 });
 
-                // --- LOGIC CORE ---
-                let totalCasualsRevenue = 0;
+                // Calculations
+                let totalCasuals = 0;
                 Store.data.casuals.forEach(p => {
-                    const games = thursdays.filter(d => Store.data.attendance[`${Utils.formatDateKey(d)}_${p.id}`]).length;
-                    totalCasualsRevenue += (games * Store.data.config.casualFee);
+                    const g = thursdays.filter(d => Store.data.attendance[`${Utils.formatDateKey(d)}_${p.id}`]).length;
+                    totalCasuals += (g * Store.data.config.casualFee);
                 });
 
-                const currentInvoice = parseFloat(Store.data.invoices[monthKey] || 0);
-                const numFijos = Store.data.fijos.length;
-                const dynamicFixedFee = (currentInvoice > 0 && numFijos > 0) 
-                    ? (currentInvoice - totalCasualsRevenue) / numFijos 
-                    : Store.data.config.fixedFee;
+                const invAmt = firstMK ? (Store.data.invoices[firstMK] || 0) : 0;
+                const fijosNet = Math.max(0, invAmt - totalCasuals);
+                const baseFee = Store.data.fijos.length > 0 ? fijosNet / Store.data.fijos.length : 0;
 
-                let expectedTotal = 0;
-                let collectedTotal = 0;
-                let expectedFijos = 0; 
+                let expTotal=0, colTotal=0, expFijos=0, debts=[];
 
                 Store.data.fijos.forEach(p => {
-                    const customFee = Store.data.customFees[`${monthKey}_${p.id}`];
-                    const feeToPay = customFee !== undefined ? customFee : dynamicFixedFee;
-                    const amount = Math.max(0, feeToPay);
-                    expectedTotal += amount;
-                    expectedFijos += amount; 
-                    collectedTotal += (Store.data.payments[`${monthKey}_${p.id}`] || 0);
+                    const cf = Store.data.customFees[`${firstMK}_${p.id}`];
+                    const toPay = cf !== undefined ? parseFloat(cf) : baseFee;
+                    expFijos += Math.max(0, toPay);
+                    let paid = 0;
+                    rangeKeys.forEach(mk => paid += (Store.data.payments[`${mk}_${p.id}`] || 0));
+                    colTotal += paid;
+                    if(toPay - paid > 0.1) debts.push({name:p.name, debt:toPay-paid, type:'Fijo'});
                 });
+                expTotal = expFijos + totalCasuals;
 
-                expectedTotal += totalCasualsRevenue;
                 Store.data.casuals.forEach(p => {
-                    collectedTotal += (Store.data.payments[`${monthKey}_${p.id}`] || 0);
+                    const g = thursdays.filter(d => Store.data.attendance[`${Utils.formatDateKey(d)}_${p.id}`]).length;
+                    const toPay = g * Store.data.config.casualFee;
+                    let paid = 0;
+                    rangeKeys.forEach(mk => paid += (Store.data.payments[`${mk}_${p.id}`] || 0));
+                    colTotal += paid;
+                    if(toPay - paid > 0.1) debts.push({name:p.name, debt:toPay-paid, type:'Casual'});
                 });
 
-                this.renderKPIs({ 
-                    expected: expectedTotal, 
-                    collected: collectedTotal, 
-                    debt: expectedTotal - collectedTotal, 
-                    expectedFijos, 
-                    expectedCasuals: totalCasualsRevenue 
-                });
+                document.getElementById('kpi-expected').textContent = Utils.formatMoney(expTotal);
+                document.getElementById('kpi-collected').textContent = Utils.formatMoney(colTotal);
+                document.getElementById('kpi-debt').textContent = Utils.formatMoney(expTotal - colTotal);
 
-                const container = document.getElementById('tables-container');
-                let html = '';
-                if (Store.activeTab !== 'casuals') html += this.generateTable('fijos', Store.data.fijos, thursdays, dynamicFixedFee);
-                if (Store.activeTab !== 'fijos') html += this.generateTable('casuals', Store.data.casuals, thursdays, Store.data.config.casualFee);
-                container.innerHTML = html;
+                const debtCard = document.getElementById('kpi-debt-card');
+                const debtTxt = document.getElementById('kpi-debt');
+                if(expTotal - colTotal > 0.1) {
+                    debtCard.className = "p-2 rounded-xl shadow-md border-2 flex flex-col justify-between h-20 transition-colors bg-red-50 border-red-300";
+                    debtTxt.className = "text-lg font-black text-red-600 truncate";
+                } else {
+                    debtCard.className = "p-2 rounded-xl shadow-md border-2 flex flex-col justify-between h-20 transition-colors bg-white border-slate-300";
+                    debtTxt.className = "text-lg font-black text-slate-300 truncate";
+                }
+
+                if(Store.editMode) {
+                     document.getElementById('invoice-calculation').innerHTML = `Total: ${invAmt.toFixed(2)}€ - Casuals: ${totalCasuals.toFixed(2)}€ = <b>${fijosNet.toFixed(2)}€</b> (Neto Fijos)<br>Cuota sugerida: <b>${baseFee.toFixed(2)}€</b> /jugador`;
+                }
+
+                const cont = document.getElementById('tables-container');
+                let h = '';
+                if(Store.activeTab==='resumen' || Store.activeTab==='fijos') h += this.table('fijos', Store.data.fijos, thursdays, baseFee, rangeKeys);
+                if(Store.activeTab==='resumen' || Store.activeTab==='casuals') h += this.table('casuals', Store.data.casuals, thursdays, Store.data.config.casualFee, rangeKeys);
+                if(Store.activeTab==='deudas') h += this.debtList(debts);
+                
+                cont.innerHTML = h;
+                
+                // Bugfix: Ensure elements exist before setting textContent
+                const appIdEl = document.getElementById('debug-app-id');
+                if(appIdEl) appIdEl.textContent = APP_ID;
+                
+                const userIdEl = document.getElementById('debug-user-id');
+                if(userIdEl) userIdEl.textContent = Store.user?.uid || '...';
+                
                 lucide.createIcons();
+                saveLocal();
             },
 
-            generateTable(type, players, thursdays, currentFee) {
+            table(type, players, dates, baseFee, monthKeys) {
                 const isFijos = type === 'fijos';
-                const theme = isFijos ? { t: 'text-orange-600', b: 'bg-orange-50', i: 'lock' } : { t: 'text-blue-600', b: 'bg-blue-50', i: 'unlock' };
-                const monthKey = Store.getMonthKey();
-
+                const color = isFijos ? 'text-orange-700' : 'text-blue-700';
+                const bgHeader = isFijos ? 'bg-orange-50' : 'bg-blue-50';
+                const icon = isFijos ? 'lock' : 'unlock';
+                
                 const rows = players.map(p => {
-                    const games = thursdays.filter(d => Store.data.attendance[`${Utils.formatDateKey(d)}_${p.id}`]).length;
-                    const customFee = Store.data.customFees[`${monthKey}_${p.id}`];
-                    
-                    let toPay;
-                    if (isFijos) {
-                        toPay = customFee !== undefined ? parseFloat(customFee) : Math.max(0, currentFee);
+                    let fee = 0, paid = 0;
+                    if(isFijos) {
+                        const cf = Store.data.customFees[`${monthKeys[0]}_${p.id}`];
+                        fee = Math.max(0, cf !== undefined ? parseFloat(cf) : baseFee);
                     } else {
-                        toPay = games * currentFee;
+                        const g = dates.filter(d => Store.data.attendance[`${Utils.formatDateKey(d)}_${p.id}`]).length;
+                        fee = g * Store.data.config.casualFee;
                     }
+                    monthKeys.forEach(mk => paid += (Store.data.payments[`${mk}_${p.id}`] || 0));
+                    const isPaid = (fee - paid) <= 0.1;
 
-                    const paid = Store.data.payments[`${monthKey}_${p.id}`] || 0;
-                    const isPaid = (toPay - paid) <= 0.1;
-
-                    const cells = thursdays.map(d => {
-                        const dKey = Utils.formatDateKey(d);
-                        const att = !!Store.data.attendance[`${dKey}_${p.id}`];
-                        return `<td class="p-1 text-center border-l border-slate-50 relative whitespace-nowrap">
-                            <button onclick="Actions.toggleAttendance('${p.id}', '${dKey}')" class="touch-target w-8 h-8 mx-auto flex items-center justify-center rounded-full border-2 transition-all ${att ? 'bg-orange-500 border-orange-500 text-white shadow-sm scale-100' : 'bg-white border-slate-200 text-transparent hover:border-orange-300 scale-90'}">
-                                ${att ? '<i data-lucide="activity" class="w-4 h-4"></i>' : ''}
-                            </button>
+                    const cells = dates.map(d => {
+                        const k = Utils.formatDateKey(d);
+                        const act = !!Store.data.attendance[`${k}_${p.id}`];
+                        return `<td class="p-1 text-center table-cell-border">
+                            <div onclick="Actions.toggleAtt('${p.id}', '${k}')" class="w-9 h-9 mx-auto rounded-lg flex items-center justify-center cursor-pointer transition-all ${act ? 'bg-slate-900 text-white shadow-md scale-105 border-2 border-slate-700' : 'bg-white border-2 border-slate-300 hover:border-orange-400'}">
+                                ${act ? '<i data-lucide="check" class="w-5 h-5 stroke-[3]"></i>' : ''}
+                            </div>
                         </td>`;
                     }).join('');
 
-                    let totalCell;
-                    if (Store.editMode && isFijos) {
-                        totalCell = `<td class="px-2 py-2 text-right bg-orange-50/20 border-l border-slate-200 whitespace-nowrap">
-                            <input type="number" value="${customFee !== undefined ? customFee : ''}" placeholder="${Math.max(0, currentFee).toFixed(2)}" onchange="Actions.updateCustomFee('${p.id}', this.value)" class="w-16 text-right p-1 rounded text-xs border border-orange-300/50 font-mono font-bold text-slate-700 outline-none">
-                        </td>`;
-                    } else {
-                        totalCell = `<td class="px-2 py-2 text-right font-mono font-bold text-slate-700 bg-orange-50/20 text-xs border-l border-slate-200 relative whitespace-nowrap">
-                            ${toPay.toFixed(2)} ${customFee !== undefined ? '<span class="absolute top-1 right-1 w-1.5 h-1.5 bg-orange-500 rounded-full"></span>' : ''}
-                        </td>`;
-                    }
+                    const totalDisplay = (Store.editMode && isFijos) 
+                        ? `<input type="number" value="${Store.data.customFees[`${monthKeys[0]}_${p.id}`]??''}" placeholder="${baseFee.toFixed(2)}" onchange="Actions.setCF('${p.id}',this.value)" class="w-14 text-right bg-orange-50 rounded border-2 border-orange-300 text-xs font-bold outline-none focus:border-orange-600">` 
+                        : fee.toFixed(2);
 
-                    const checkIcon = isPaid ? 'check-circle-2' : 'x-circle';
-                    const checkClass = isPaid ? 'text-green-500' : 'text-red-400';
-                    const checkBg = isPaid ? 'bg-green-50' : 'bg-red-50';
-
-                    return `<tr class="hover:bg-slate-50 transition-colors group">
-                        <td class="sticky-col sticky-shadow px-3 md:px-4 py-3 font-medium text-slate-900 border-r border-transparent bg-white group-hover:bg-slate-50">
-                            <div class="flex items-center justify-between min-w-[100px]">
-                                <div class="flex items-center gap-1.5"><span class="truncate max-w-[85px] md:max-w-none text-sm md:text-base">${p.name}</span><span class="text-base">🍺</span></div>
-                                ${!isPaid && toPay > 0 ? '<div class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-red ml-1"></div>' : ''}
+                    return `<tr class="zebra-row group hover:bg-orange-50 transition-colors">
+                        <td class="sticky-col px-3 py-3 text-sm font-bold text-slate-900 group-hover:bg-orange-50 border-b border-slate-300 shadow-sm">
+                            <div class="flex items-center justify-between w-full">
+                                <span>${p.name}</span>
+                                ${!isPaid && fee > 0 ? '<span class="w-2 h-2 bg-red-600 rounded-full ml-2"></span>' : ''}
                             </div>
                         </td>
                         ${cells}
-                        ${totalCell}
-                        <td class="px-2 py-2 text-center ${checkBg} border-l border-slate-200 whitespace-nowrap">
-                            <button onclick="Actions.togglePayment('${p.id}', ${toPay})" class="touch-target flex items-center justify-center mx-auto active:scale-90 transition-transform ${checkClass}"><i data-lucide="${checkIcon}" class="w-6 h-6"></i></button>
+                        <td class="px-2 text-right font-mono text-xs font-bold text-slate-800 bg-slate-100 table-cell-border">${totalDisplay}</td>
+                        <td class="px-2 text-center table-cell-border bg-white">
+                            <button onclick="Actions.togglePay('${p.id}', ${fee})" class="mx-auto p-1 rounded-full transition-all ${isPaid ? 'text-green-600 bg-green-50 ring-2 ring-green-200' : 'text-slate-300 hover:text-green-500 hover:bg-slate-50 ring-2 ring-slate-200'}"><i data-lucide="${isPaid?'check':'banknote'}" class="w-5 h-5"></i></button>
                         </td>
-                        ${Store.editMode ? `<td class="px-1 text-center align-middle border-l border-slate-200 whitespace-nowrap"><button onclick="Actions.removePlayer('${p.id}', '${type}')" class="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-full"><i data-lucide="trash-2" class="w-4 h-4"></i></button></td>` : ''}
+                        ${Store.editMode ? `<td class="px-1 text-center border-b border-slate-300"><button onclick="Actions.delP('${type}','${p.id}')" class="text-slate-400 hover:text-red-600"><i data-lucide="trash-2" class="w-4 h-4"></i></button></td>` : ''}
                     </tr>`;
                 }).join('');
 
-                const configInput = (Store.editMode && !isFijos) ? `
-                    <div class="flex items-center gap-2 bg-white px-2 py-1 rounded border border-slate-200 text-[10px] md:text-xs shadow-sm ml-auto">
-                        <span class="text-slate-500 font-bold">PRECIO:</span>
-                        <input type="number" value="${Store.data.config.casualFee}" onchange="Actions.updateConfig('casualFee', this.value)" class="w-12 md:w-16 text-right font-mono border-b outline-none focus:border-orange-500"><span>€</span>
-                    </div>` : '';
+                const headers = dates.map(d => `<th class="px-1 py-2 text-center min-w-[48px] table-header-border bg-slate-100"><div class="flex flex-col items-center justify-center gap-0.5 leading-none"><span class="text-[8px] font-bold uppercase text-slate-400">${d.toLocaleDateString('es',{month:'short'}).slice(0,3)}</span><span class="text-sm font-black text-slate-800">${d.getDate()}</span><span class="text-[8px] font-bold uppercase text-slate-500">${d.toLocaleDateString('es',{weekday:'short'}).slice(0,2)}</span></div></th>`).join('');
 
-                return `<div class="bg-white rounded-xl shadow-sm overflow-hidden border border-slate-200">
-                    <div class="px-3 md:px-4 py-3 ${theme.b} border-b border-slate-200 flex items-center justify-between">
-                        <h3 class="font-bold text-sm flex items-center gap-2 uppercase ${theme.t}"><i data-lucide="${theme.i}" class="w-4 h-4"></i> ${type === 'fijos' ? 'Equipo Fijo' : 'Jugadores Casuals'}</h3>
-                        ${configInput}
+                return `<div class="bg-white rounded-xl shadow-md border-2 border-slate-300 overflow-hidden">
+                    <div class="px-4 py-3 border-b-2 border-slate-300 flex justify-between items-center ${bgHeader}">
+                        <h3 class="font-black text-sm uppercase ${color} flex items-center gap-2"><i data-lucide="${icon}" class="w-4 h-4"></i> ${isFijos?'Equipo Fijo':'Casuals'}</h3>
+                        ${(Store.editMode && !isFijos) ? `<div class="flex items-center gap-1 text-xs font-bold"><span>PRECIO:</span><input type="number" value="${Store.data.config.casualFee}" onchange="Actions.setConfig('casualFee',this.value)" class="w-12 text-right border-2 border-slate-300 rounded px-1 font-mono">€</div>` : ''}
                     </div>
                     <div class="overflow-x-auto scrollbar-hide">
-                        <table class="w-full text-sm text-left border-collapse">
-                            <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b">
-                                <tr>
-                                    <th class="sticky-col sticky-shadow px-3 md:px-4 py-3 z-30 min-w-[100px] bg-slate-50">Nombre</th>
-                                    ${thursdays.map(d => `<th class="px-1 py-2 text-center min-w-[44px] whitespace-nowrap"><div class="flex flex-col items-center leading-tight"><span class="font-bold text-slate-800 text-xs">${d.getDate()}</span><span class="text-[9px] text-slate-400 uppercase">${d.toLocaleString('es-ES',{month:'short'})}</span></div></th>`).join('')}
-                                    <th class="px-2 py-2 text-right min-w-[80px] bg-orange-50/50 text-orange-900 border-l border-slate-200 whitespace-nowrap">Total</th>
-                                    <th class="px-2 py-2 text-center min-w-[60px] bg-green-50/50 text-green-900 border-l border-slate-200 whitespace-nowrap">Pagado</th>
-                                    ${Store.editMode ? '<th class="w-10 border-l border-slate-200"></th>' : ''}
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-slate-100">
-                                ${rows}
-                                <tr class="bg-slate-50/50"><td colspan="${thursdays.length + (Store.editMode ? 4 : 3)}" class="p-2">
-                                    <div class="flex gap-2 max-w-md mx-auto items-center">
-                                        <input type="text" placeholder="Nuevo jugador..." value="${Store.inputs[type]}" oninput="Actions.handleInputChange('${type}', this.value)" onkeydown="if(event.key === 'Enter') Actions.addPlayer('${type}')" class="flex-1 px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:border-orange-500">
-                                        <button id="btn-add-${type}" onclick="Actions.addPlayer('${type}')" ${!Store.inputs[type].trim()?'disabled':''} class="px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 disabled:opacity-50 flex items-center gap-1"><i data-lucide="plus" class="w-3 h-3"></i> AÑADIR</button>
-                                    </div>
-                                </td></tr>
-                            </tbody>
+                        <table class="w-full table-grid">
+                            <thead><tr class="bg-slate-200"><th class="sticky-col px-3 py-2 text-left text-[10px] text-slate-600 uppercase font-black min-w-[120px] bg-slate-200 z-30 border-b-2 border-slate-400 shadow-sm">Jugador</th>${headers}<th class="px-2 text-right text-[10px] font-black uppercase bg-slate-200 min-w-[70px] table-header-border text-slate-600">Total</th><th class="px-2 text-center text-[10px] font-black uppercase min-w-[60px] table-header-border bg-slate-200 text-slate-600">Pago</th>${Store.editMode?'<th class="bg-slate-200 border-b-2 border-slate-400"></th>':''}</tr></thead>
+                            <tbody>${rows}</tbody>
                         </table>
                     </div>
+                    <div class="p-3 border-t-2 border-slate-300 flex gap-2 bg-slate-50">
+                        <input type="text" placeholder="Añadir nuevo..." onkeydown="if(event.key==='Enter') Actions.addP('${type}',this.value)" class="flex-1 px-4 py-2 text-sm border-2 border-slate-300 rounded-lg bg-white outline-none focus:border-slate-900 font-medium">
+                        <button onclick="const i=this.previousElementSibling;Actions.addP('${type}',i.value);i.value=''" class="px-4 py-2 bg-slate-900 text-white rounded-lg font-bold text-xs hover:bg-slate-700 uppercase">Añadir</button>
+                    </div>
                 </div>`;
+            },
+            debtList(debts) {
+                if(!debts.length) return `<div class="bg-green-50 border-2 border-green-200 p-6 rounded-xl text-center text-green-800 font-black text-sm shadow-sm">¡Todo al día! Excelente. 🎉</div>`;
+                return `<div class="bg-white rounded-xl border-2 border-red-200 shadow-md overflow-hidden"><div class="px-4 py-3 bg-red-50 border-b-2 border-red-200 text-red-700 font-black text-sm uppercase flex items-center gap-2"><i data-lucide="alert-triangle" class="w-4 h-4"></i> Pendientes</div><div class="divide-y-2 divide-slate-100">${debts.map(d => `<div class="px-4 py-3 flex justify-between items-center hover:bg-red-50 transition-colors"><div><p class="font-bold text-sm text-slate-900">${d.name}</p><p class="text-[10px] text-red-500 uppercase font-black tracking-wide">${d.type}</p></div><span class="font-mono font-black text-lg text-red-600 bg-red-50 px-2 py-1 rounded border border-red-100">${d.debt.toFixed(2)}€</span></div>`).join('')}</div></div>`;
             }
         };
 
         window.Actions = {
-            toggleEditMode: () => { Store.editMode = !Store.editMode; UI.render(); },
-            changeMonth: (offset) => { Store.viewDate.setMonth(Store.viewDate.getMonth() + offset); Store.viewDate = new Date(Store.viewDate); UI.render(); },
-            goToToday: () => { Store.viewDate = new Date(); UI.render(); },
-            setActiveTab: (tab) => { Store.activeTab = tab; UI.render(); },
-            toggleAttendance: (id, date) => Service.updateField(`attendance.${date}_${id}`, Store.data.attendance[`${date}_${id}`] ? deleteField() : true),
-            togglePayment: (id, amount) => {
-                const k = `${Store.getMonthKey()}_${id}`;
-                Service.updateField(`payments.${k}`, (Store.data.payments[k] >= amount - 0.1) ? deleteField() : amount);
-            },
-            updateInvoiceTotal: (val) => Service.updateField(`invoices.${Store.getMonthKey()}`, parseFloat(val) || 0),
-            updateCustomFee: (id, val) => Service.updateField(`customFees.${Store.getMonthKey()}_${id}`, val === '' ? deleteField() : parseFloat(val)),
-            handleInputChange: (t, v) => { Store.inputs[t] = v; document.getElementById(`btn-add-${t}`).disabled = !v.trim(); },
-            addPlayer: (t) => { 
-                if(!Store.inputs[t].trim()) return; 
-                const list = [...Store.data[t], {id:`${t[0]}_${Date.now()}`, name:Store.inputs[t]}];
-                Store.inputs[t]=''; 
-                Service.updateField(t, list).then(()=>UI.render()); 
-            },
-            removePlayer: (id, t) => Service.updateField(t, Store.data[t].filter(p => p.id !== id)),
-            updateConfig: (k, v) => Service.updateField('config', { ...Store.data.config, [k]: parseFloat(v) || 0 })
+            toggleEditMode: () => Store.editMode ? (Store.editMode=false, UI.render()) : document.getElementById('pin-modal').classList.remove('hidden') || setTimeout(()=>document.getElementById('pin-modal').classList.add('modal-open'),10),
+            closePinModal: () => { document.getElementById('pin-modal').classList.remove('modal-open'); setTimeout(()=>document.getElementById('pin-modal').classList.add('hidden'),300); },
+            submitPin: () => { if(document.getElementById('pin-input').value === ADMIN_PIN) { Store.editMode=true; Actions.closePinModal(); UI.render(); } else document.getElementById('pin-error').classList.remove('hidden'); },
+            updateRange: (v,t) => { if(!v)return; Store.dateRange[t]=v; if(new Date(Store.dateRange.start)>new Date(Store.dateRange.end)) Store.dateRange[t==='start'?'end':'start']=v; UI.render(); },
+            setActiveTab: t => { Store.activeTab=t; UI.render(); },
+            toggleAttendance: (pid,k) => { if(!Store.editMode)return; const key=`attendance.${k}_${pid}`; updateCloud(key, Store.data.attendance[`${k}_${pid}`]?deleteField():true); if(!syncReady){ if(Store.data.attendance[`${k}_${pid}`]) delete Store.data.attendance[`${k}_${pid}`]; else Store.data.attendance[`${k}_${pid}`]=true; UI.render(); } },
+            toggleAtt: (pid, k) => Actions.toggleAttendance(pid,k),
+            togglePay: (pid,amt) => { const mk=Utils.getMonthKeysForDateRange(Store.dateRange.start,Store.dateRange.end)[0]; const k=`payments.${mk}_${pid}`; const cur=Store.data.payments[k]||0; const val=(cur>=amt-0.1)?deleteField():amt; updateCloud(k,val); if(!syncReady){ if(cur>=amt-0.1)delete Store.data.payments[k]; else Store.data.payments[k]=amt; UI.render(); } },
+            updateInvoiceTotal: v => { const mk=Utils.getMonthKeysForDateRange(Store.dateRange.start,Store.dateRange.end)[0]; if(!mk)return; const val=parseFloat(v); updateCloud(`invoices.${mk}`, val?val:deleteField()); if(!syncReady){ if(val)Store.data.invoices[mk]=val; else delete Store.data.invoices[mk]; UI.render(); } },
+            setCF: (pid,v) => { const mk=Utils.getMonthKeysForDateRange(Store.dateRange.start,Store.dateRange.end)[0]; updateCloud(`customFees.${mk}_${pid}`, (v!=='')?parseFloat(v):deleteField()); },
+            setConfig: (k,v) => updateCloud(`config.${k}`, parseFloat(v)||0),
+            addP: (t,n) => { if(!n.trim())return; const l=[...Store.data[t],{id:t[0]+Date.now(),name:n.trim()}]; updateCloud(t,l); if(!syncReady){Store.data[t]=l;UI.render();} },
+            delP: (t,id) => { if(!confirm('¿Borrar?'))return; const l=Store.data[t].filter(p=>p.id!==id); updateCloud(t,l); if(!syncReady){Store.data[t]=l;UI.render();} }
         };
 
-        if (auth) {
-            onAuthStateChanged(auth, (u) => { 
-                Store.user = u; 
-                if(u) {
-                    Service.setupSync(); 
-                } else {
-                    Service.initAuth(); 
-                }
-            });
-        }
+        window.onload = initApp;
     </script>
 </body>
 </html>
