@@ -293,12 +293,11 @@
                 else cred = await signInAnonymously(auth);
                 Store.user = cred.user;
 
-                const docRef = doc(db, 'artifacts', APP_ID, 'public', 'data', COLLECTION_NAME, DOC_ID);
+                      const docRef = doc(db, COLLECTION_NAME, DOC_ID);
                 UI.setSync('syncing');
 
                 onSnapshot(docRef, (snap) => {
-                    UI.hideLoading();
-                    if(snap.exists()) {
+                                              if(snap.exists()) {
                         Store.data = { ...Store.data, ...snap.data() };
                         syncReady = true;
                         UI.setSync('online');
@@ -318,8 +317,7 @@
             try {
                 if(typeof field === 'object') await updateDoc(docRef, field);
                 else await updateDoc(docRef, {[field]: val});
-                UI.setSync('online');
-            } catch(e) { UI.setSync('offline'); }
+                                } catch(e) { UI.setSync('offline'); }
         }
 
         function loadLocal(){ try{ const s=localStorage.getItem('pachanga_prefs_v5'); if(s) Store.dateRange=JSON.parse(s).dateRange; }catch(e){} }
