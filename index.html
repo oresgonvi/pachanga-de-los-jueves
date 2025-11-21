@@ -236,15 +236,15 @@
         // ESTA CONFIGURACIÓN HACE QUE FUNCIONE DENTRO DE LA PLATAFORMA
         const firebaseConfig = typeof __firebase_config !== 'undefined' 
             ? JSON.parse(__firebase_config)
-            : { 
-                // *** SI SUBES A GITHUB, SUSTITUYE ESTO CON TUS CLAVES REALES ***
-                apiKey: "TU_API_KEY", 
-                authDomain: "TU_PROYECTO.firebaseapp.com", 
-                projectId: "TU_PROYECTO", 
-                storageBucket: "TU_PROYECTO.appspot.com", 
-                messagingSenderId: "TU_SENDER_ID", 
-                appId: "TU_APP_ID" 
-            };
+            : {
+        // Configuración real de Firebase para sincronización en la nube
+        apiKey: "AIzaSyDN1QBtqzAnYvV5ISus0PG8CynFK1xqCHs",
+        authDomain: "pachanga-de-los-jueves.firebaseapp.com",
+        projectId: "pachanga-de-los-jueves",
+        storageBucket: "pachanga-de-los-jueves.firebasestorage.app",
+        messagingSenderId: "635802473606",
+        appId: "1:635802473606:web:917112d1bf6907f6022d07"
+      };
         
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
@@ -413,8 +413,7 @@
         function setupFirestoreListener() {
             if (unsubscribe) unsubscribe(); // Limpiar listener previo si existe
 
-            const docRef = doc(db, 'artifacts', APP_ID, 'public', 'data', COLLECTION_NAME, DOC_ID);
-            UI.setSyncStatus('syncing');
+      const docRef = doc(db, COLLECTION_NAME, DOC_ID);            UI.setSyncStatus('syncing');
 
             unsubscribe = onSnapshot(docRef, (snapshot) => {
                 if (snapshot.exists()) {
@@ -460,8 +459,7 @@
             
             UI.setSyncStatus('syncing');
             try {
-                const docRef = doc(db, 'artifacts', APP_ID, 'public', 'data', COLLECTION_NAME, DOC_ID);
-                if (typeof field === 'object') {
+      const docRef = doc(db, COLLECTION_NAME, DOC_ID);                if (typeof field === 'object') {
                     await updateDoc(docRef, field); // Multi-update
                 } else {
                     await updateDoc(docRef, { [field]: value });
